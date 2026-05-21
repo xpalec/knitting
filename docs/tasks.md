@@ -43,38 +43,38 @@ Status legend: `[ ]` not started · `[x]` done · `[-]` in progress · `[~]` def
 ## Phase 1 — Shared types package + database schema
 
 ### `packages/types` — i18n module
-- [ ] Create `src/i18n/segments.ts`
-  - [ ] `SUPPORTED_LOCALES` constant (`['en', 'pl']` — extend later)
-  - [ ] `Locale` type
-  - [ ] `DEFAULT_LOCALE` constant
-  - [ ] `PATH_SEGMENTS` map (en, pl path segment translations)
-  - [ ] `SEGMENT_TO_CANONICAL` reverse map (used by middleware)
-- [ ] Create `src/i18n/localePath.ts`
-  - [ ] `localePath(locale, page, slug?)` helper
-  - [ ] Unit tests for all supported locales and pages
+- [x] Create `src/i18n/segments.ts`
+  - [x] `SUPPORTED_LOCALES` constant (`['en', 'pl']` — extend later)
+  - [x] `Locale` type
+  - [x] `DEFAULT_LOCALE` constant
+  - [x] `PATH_SEGMENTS` map (en, pl path segment translations)
+  - [x] `SEGMENT_TO_CANONICAL` reverse map (used by middleware)
+- [x] Create `src/i18n/localePath.ts`
+  - [x] `localePath(locale, page, slug?)` helper
+  - [x] Unit tests for all supported locales and pages
 
 ### `packages/types` — Zod schemas
-- [ ] `src/schemas/entry.ts`
-  - [ ] `SkillLevelEnum` — `beginner | intermediate | advanced | expert`
-  - [ ] `EntryStatusEnum` — `draft | review | published | deprecated`
-  - [ ] `ContentBlockSchema` — base shape (`id`, `type`, `order`, `visible`) plus discriminated union for block types: `definition`, `technique`, `media`, `callout`, `related`, `pattern_usage`
-  - [ ] `EntrySchema` — `id`, `origin_language`, `status`, `metadata`, `content_blocks`
-  - [ ] `EntryListItemSchema` — flattened shape for list rows (term and abbreviation from active `Translation`)
-- [ ] `src/schemas/translation.ts`
-  - [ ] `TranslationStatusEnum` — `draft | reviewed | published`
-  - [ ] `TranslationMetadataSchema` — `abbreviation?`, `definition_short?`
-  - [ ] `TranslationSchema` — `id`, `entry_id`, `locale`, `slug`, `term`, `metadata`, `blocks`, `status`
-  - [ ] Block content shape types per block type: `DefinitionBlockContent` (TipTap JSON), `TechniqueBlockContent` (name, difficulty, steps), `MediaBlockContent` (alt_text, caption), `CalloutBlockContent` (text)
-- [ ] `src/schemas/category.ts` — `CategorySchema`, `CategoryTreeSchema`
-- [ ] `src/schemas/article.ts` — `ArticleSchema`, `ArticleListItemSchema`
-- [ ] `src/schemas/contribution.ts` — `EntrySubmissionSchema`, `TranslationSubmissionSchema`, `CorrectionSchema`
-- [ ] `src/schemas/learn.ts` — `LearningPathSchema`, `LearningPathDetailSchema`
-- [ ] `src/schemas/media.ts` — `MediaAssetSchema` (no `alt_text` or `caption` — those live in `Translation.blocks`)
-- [ ] `src/schemas/user.ts` — `UserSchema`, `RoleEnum`
-- [ ] `src/schemas/auth.ts` — `LoginSchema`, `TokenSchema`
-- [ ] `src/store.ts` — `KnittingStore` interface (Zustand shape)
-- [ ] `src/index.ts` — re-export everything
-- [ ] Confirm all schemas compile and export correctly
+- [x] `src/schemas/entry.ts`
+  - [x] `SkillLevelEnum` — `beginner | intermediate | advanced | expert`
+  - [x] `EntryStatusEnum` — `draft | review | published | deprecated`
+  - [x] `ContentBlockSchema` — base shape (`id`, `type`, `order`, `visible`) plus discriminated union for block types: `definition`, `technique`, `media`, `callout`, `related`, `pattern_usage`
+  - [x] `EntrySchema` — `id`, `origin_language`, `status`, `metadata`, `content_blocks`
+  - [x] `EntryListItemSchema` — flattened shape for list rows (term and abbreviation from active `Translation`)
+- [x] `src/schemas/translation.ts`
+  - [x] `TranslationStatusEnum` — `draft | reviewed | published`
+  - [x] `TranslationMetadataSchema` — `abbreviation?`, `definition_short?`
+  - [x] `TranslationSchema` — `id`, `entry_id`, `locale`, `slug`, `term`, `metadata`, `blocks`, `status`
+  - [x] Block content shape types per block type: `DefinitionBlockContent` (TipTap JSON), `TechniqueBlockContent` (name, difficulty, steps), `MediaBlockContent` (alt_text, caption), `CalloutBlockContent` (text)
+- [x] `src/schemas/category.ts` — `CategorySchema`, `CategoryTreeSchema`
+- [x] `src/schemas/article.ts` — `ArticleSchema`, `ArticleListItemSchema`
+- [x] `src/schemas/contribution.ts` — `EntrySubmissionSchema`, `TranslationSubmissionSchema`, `CorrectionSchema`
+- [x] `src/schemas/learn.ts` — `LearningPathSchema`, `LearningPathDetailSchema`
+- [x] `src/schemas/media.ts` — `MediaAssetSchema` (no `alt_text` or `caption` — those live in `Translation.blocks`)
+- [x] `src/schemas/user.ts` — `UserSchema`, `RoleEnum`
+- [x] `src/schemas/auth.ts` — `LoginSchema`, `TokenSchema`
+- [x] `src/store.ts` — `KnittingStore` interface (Zustand shape)
+- [x] `src/index.ts` — re-export everything
+- [x] Confirm all schemas compile and export correctly
 
 ### `apps/api` — Prisma schema
 - [ ] Install Prisma, initialise with PostgreSQL provider
