@@ -1,0 +1,17 @@
+{
+  "name": "@knitting/types",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@knitting/config-typescript": "workspace:*",
+    "typescript": "5.9.2"
+  }
+}

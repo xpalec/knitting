@@ -1,0 +1,11 @@
+{
+  "name": "@knitting/config-tailwind",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "exports": {
+    "./preset": "./tailwind-preset.mjs",
+    "./tokens.css": "./tokens.css",
+    "./package.json": "./package.json"
+  }
+}
