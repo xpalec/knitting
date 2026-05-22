@@ -117,122 +117,122 @@ Status legend: `[ ]` not started · `[x]` done · `[-]` in progress · `[~]` def
 ## Phase 2 — NestJS API
 
 ### Infrastructure
-- [ ] Create `src/prisma/prisma.service.ts` and `PrismaModule` (global)
-- [ ] Add global `ValidationPipe` (class-validator, whitelist, forbidNonWhitelisted)
-- [ ] Add global exception filter (maps Prisma errors to HTTP responses)
-- [ ] Add response transform interceptor (wraps responses in `{ data, meta?, error? }`)
-- [ ] Add Swagger (`@nestjs/swagger`) at `/api/docs`
-- [ ] Add `@nestjs/cache-manager` with Redis adapter
-- [ ] Add `@nestjs/throttler` with Redis store (rate limiting for contribution endpoints)
-- [ ] Configure CORS for `localhost:3000`, `localhost:3001`, and production domains
+- [x] Create `src/prisma/prisma.service.ts` and `PrismaModule` (global)
+- [x] Add global `ValidationPipe` (class-validator, whitelist, forbidNonWhitelisted)
+- [x] Add global exception filter (maps Prisma errors to HTTP responses)
+- [x] Add response transform interceptor (wraps responses in `{ data, meta?, error? }`)
+- [x] Add Swagger (`@nestjs/swagger`) at `/api/docs`
+- [x] Add `@nestjs/cache-manager` with Redis adapter
+- [x] Add `@nestjs/throttler` with Redis store (rate limiting for contribution endpoints)
+- [x] Configure CORS for `localhost:3000`, `localhost:3001`, and production domains
 
 ### `CategoryModule`
-- [ ] `GET /api/v1/categories` — full category tree (nested)
-- [ ] `GET /api/v1/categories/:slug/entries` — paginated entries in category
-- [ ] Cache category tree with 24h TTL
-- [ ] Unit tests for `CategoryService`
+- [x] `GET /api/v1/categories` — full category tree (nested)
+- [x] `GET /api/v1/categories/:slug/entries` — paginated entries in category
+- [x] Cache category tree with 24h TTL
+- [x] Unit tests for `CategoryService`
 - [ ] e2e tests for both endpoints
 
 ### `EntryModule`
-- [ ] `GET /api/v1/entries` — paginated, locale-aware alphabetical list
-  - [ ] Query params: `locale`, `page`, `limit`, `category`, `skillLevel`, `sort`
-  - [ ] Locale-aware collation via ICU or `pg_collation`
-  - [ ] Each row resolves term and abbreviation from `Translation.term` and `Translation.metadata.abbreviation` for the requested locale
-  - [ ] Entries missing the requested locale Translation fall back to `en` Translation and are flagged `missing_translation: true`
-- [ ] `GET /api/v1/entries/:locale/:slug` — full entry detail resolved via `(locale, slug)` on `Translation`
-  - [ ] Returns assembled response: `Entry` fields + active `Translation` (term, slug, metadata, blocks) + `content_blocks` layout
-  - [ ] Includes `related_entries` (resolved via `RelatedEntry`; each includes `Translation.term` for active locale)
-  - [ ] Includes `media_assets` (URL from `MediaAsset`; alt text and caption from `Translation.blocks`)
-  - [ ] Includes `pattern_usage` rows
-  - [ ] `Entry.id` never exposed in response — internal identifier only
-- [ ] Cache entry detail with 1h TTL; invalidate on publish/update
-- [ ] Unit tests for `EntryService`
+- [x] `GET /api/v1/entries` — paginated, locale-aware alphabetical list
+  - [x] Query params: `locale`, `page`, `limit`, `category`, `skillLevel`, `sort`
+  - [x] Locale-aware collation via ICU or `pg_collation`
+  - [x] Each row resolves term and abbreviation from `Translation.term` and `Translation.metadata.abbreviation` for the requested locale
+  - [x] Entries missing the requested locale Translation fall back to `en` Translation and are flagged `missing_translation: true`
+- [x] `GET /api/v1/entries/:locale/:slug` — full entry detail resolved via `(locale, slug)` on `Translation`
+  - [x] Returns assembled response: `Entry` fields + active `Translation` (term, slug, metadata, blocks) + `content_blocks` layout
+  - [x] Includes `related_entries` (resolved via `RelatedEntry`; each includes `Translation.term` for active locale)
+  - [x] Includes `media_assets` (URL from `MediaAsset`; alt text and caption from `Translation.blocks`)
+  - [x] Includes `pattern_usage` rows
+  - [x] `Entry.id` never exposed in response — internal identifier only
+- [x] Cache entry detail with 1h TTL; invalidate on publish/update
+- [x] Unit tests for `EntryService`
 - [ ] e2e tests for list and detail endpoints
 
 ### `SearchModule`
-- [ ] `GET /api/v1/search` — query params: `q`, `locale`, `category`, `skillLevel`
-- [ ] Full-text search against `Translation.search_vector` only — no fallback to `Entry`
-- [ ] Rank results: active locale matches first, then other locales
-- [ ] Each result returns: matched `Translation.term`, locale, `Translation.metadata.definition_short`, `Translation.slug`
-- [ ] Cache search results with 5min TTL
+- [x] `GET /api/v1/search` — query params: `q`, `locale`, `category`, `skillLevel`
+- [x] Full-text search against `Translation.search_vector` only — no fallback to `Entry`
+- [x] Rank results: active locale matches first, then other locales
+- [x] Each result returns: matched `Translation.term`, locale, `Translation.metadata.definition_short`, `Translation.slug`
+- [x] Cache search results with 5min TTL
 - [ ] e2e tests with multi-locale data
 
 ### `ArticleModule`
-- [ ] `GET /api/v1/articles` — list with filter by tag and country
-- [ ] `GET /api/v1/articles/:slug` — full article detail
+- [x] `GET /api/v1/articles` — list with filter by tag and country
+- [x] `GET /api/v1/articles/:slug` — full article detail
 - [ ] e2e tests for both endpoints
 
 ### `CountryModule`
-- [ ] `GET /api/v1/countries/:code` — country landing data
-  - [ ] Filters entries by `Entry.origin_language = code`
-  - [ ] Returns: featured entries (with active locale `Translation`), article links
-- [ ] Cache with 6h TTL
+- [x] `GET /api/v1/countries/:code` — country landing data
+  - [x] Filters entries by `Entry.origin_language = code`
+  - [x] Returns: featured entries (with active locale `Translation`), article links
+- [x] Cache with 6h TTL
 
 ### `LearnModule`
-- [ ] `GET /api/v1/learn` — list of learning paths with metadata
-- [ ] `GET /api/v1/learn/:slug` — path detail with ordered entries (each entry includes active locale `Translation.term` and `metadata.definition_short`)
+- [x] `GET /api/v1/learn` — list of learning paths with metadata
+- [x] `GET /api/v1/learn/:slug` — path detail with ordered entries (each entry includes active locale `Translation.term` and `metadata.definition_short`)
 - [ ] Seed at least 4 learning paths at launch
 
 ### `ContributionModule`
-- [ ] `POST /api/v1/contributions/entry` — new entry submission
-  - [ ] Validate against `EntrySubmissionSchema`
-  - [ ] Rate limit: 5 per IP per hour
-  - [ ] Insert into `Contribution` table with `type = 'entry'`, `status = 'pending'`
-  - [ ] Optionally capture submitter email
-- [ ] `POST /api/v1/contributions/translation` — translation submission
-  - [ ] `entry_id` resolved from `Translation` lookup on submitted `slug` — never accept raw `entry_id` from public
-  - [ ] Rate limit: 20 per IP per hour
-- [ ] `POST /api/v1/contributions/correction` — correction report
-  - [ ] Rate limit: 10 per IP per hour
+- [x] `POST /api/v1/contributions/entry` — new entry submission
+  - [x] Validate against `EntrySubmissionSchema`
+  - [x] Rate limit: 5 per IP per hour
+  - [x] Insert into `Contribution` table with `type = 'entry'`, `status = 'pending'`
+  - [x] Optionally capture submitter email
+- [x] `POST /api/v1/contributions/translation` — translation submission
+  - [x] `entry_id` resolved from `Translation` lookup on submitted `slug` — never accept raw `entry_id` from public
+  - [x] Rate limit: 20 per IP per hour
+- [x] `POST /api/v1/contributions/correction` — correction report
+  - [x] Rate limit: 10 per IP per hour
 - [ ] e2e tests for all three endpoints including rate limit behaviour
 
 ### `AuthModule`
-- [ ] `POST /api/v1/auth/login` — validate credentials, issue JWT in HttpOnly cookie
-- [ ] `POST /api/v1/auth/refresh` — refresh token
-- [ ] `POST /api/v1/auth/logout` — clear cookie
-- [ ] `JwtAuthGuard` — validates cookie on protected routes
-- [ ] `RolesGuard` — enforces `editor`, `reviewer`, `admin` roles
+- [x] `POST /api/v1/auth/login` — validate credentials, issue JWT in HttpOnly cookie
+- [x] `POST /api/v1/auth/refresh` — refresh token
+- [x] `POST /api/v1/auth/logout` — clear cookie
+- [x] `JwtAuthGuard` — validates cookie on protected routes
+- [x] `RolesGuard` — enforces `editor`, `reviewer`, `admin` roles
 - [ ] e2e tests for login, protected route, and logout
 
 ### `AdminQueueModule`
-- [ ] `GET /api/v1/admin/queue/entries` — paginated pending `Contribution` rows with `type = 'entry'`
-- [ ] `PATCH /api/v1/admin/queue/entries/:id` — approve or reject
-  - [ ] On approve: create `Entry` with `content_blocks` seeded from `BlockTemplate` matching submitted entry type; create `en` `Translation` row from submission payload; set status `draft`
-  - [ ] On reject: set `status = 'rejected'`, store `reviewer_note`
-- [ ] `GET /api/v1/admin/queue/translations` — pending translation contributions
-- [ ] `PATCH /api/v1/admin/queue/translations/:id` — approve (create or update `Translation` row) or reject
-- [ ] `GET /api/v1/admin/queue/corrections` — flagged corrections
-- [ ] `PATCH /api/v1/admin/queue/corrections/:id` — acknowledge or dismiss
-- [ ] All routes protected by `JwtAuthGuard` + `editor` or higher role
+- [x] `GET /api/v1/admin/queue/entries` — paginated pending `Contribution` rows with `type = 'entry'`
+- [x] `PATCH /api/v1/admin/queue/entries/:id` — approve or reject
+  - [x] On approve: create `Entry` with `content_blocks` seeded from `BlockTemplate` matching submitted entry type; create `en` `Translation` row from submission payload; set status `draft`
+  - [x] On reject: set `status = 'rejected'`, store `reviewer_note`
+- [x] `GET /api/v1/admin/queue/translations` — pending translation contributions
+- [x] `PATCH /api/v1/admin/queue/translations/:id` — approve (create or update `Translation` row) or reject
+- [x] `GET /api/v1/admin/queue/corrections` — flagged corrections
+- [x] `PATCH /api/v1/admin/queue/corrections/:id` — acknowledge or dismiss
+- [x] All routes protected by `JwtAuthGuard` + `editor` or higher role
 
 ### `AdminEntryModule`
-- [ ] `POST /api/v1/admin/entries` — create entry
-  - [ ] Seeds `content_blocks` from `BlockTemplate` for given entry type
-  - [ ] Creates initial `en` `Translation` row (status `draft`)
-  - [ ] Sets `Entry.status = 'draft'`
-- [ ] `PUT /api/v1/admin/entries/:id` — update `Entry` fields (`origin_language`, `status`, `metadata`)
-- [ ] `PUT /api/v1/admin/entries/:id/blocks` — update `Entry.content_blocks` layout (admin role only)
-- [ ] `PUT /api/v1/admin/entries/:id/translations/:locale` — create or update `Translation` row (term, slug, metadata, blocks content)
-- [ ] `PATCH /api/v1/admin/entries/:id/status` — status transitions: draft→review→published; deprecate
-- [ ] `DELETE /api/v1/admin/entries/:id` — soft-delete only: sets `Entry.status = 'deprecated'`
-- [ ] Invalidate Redis cache on create/update/status change
+- [x] `POST /api/v1/admin/entries` — create entry
+  - [x] Seeds `content_blocks` from `BlockTemplate` for given entry type
+  - [x] Creates initial `en` `Translation` row (status `draft`)
+  - [x] Sets `Entry.status = 'draft'`
+- [x] `PUT /api/v1/admin/entries/:id` — update `Entry` fields (`origin_language`, `status`, `metadata`)
+- [x] `PUT /api/v1/admin/entries/:id/blocks` — update `Entry.content_blocks` layout (admin role only)
+- [x] `PUT /api/v1/admin/entries/:id/translations/:locale` — create or update `Translation` row (term, slug, metadata, blocks content)
+- [x] `PATCH /api/v1/admin/entries/:id/status` — status transitions: draft→review→published; deprecate
+- [x] `DELETE /api/v1/admin/entries/:id` — soft-delete only: sets `Entry.status = 'deprecated'`
+- [x] Invalidate Redis cache on create/update/status change
 
 ### `AdminBlockTemplateModule`
-- [ ] `GET /api/v1/admin/settings/templates` — list all `BlockTemplate` rows
-- [ ] `PUT /api/v1/admin/settings/templates/:entry_type` — update default `blocks` for an entry type (admin role only)
+- [x] `GET /api/v1/admin/settings/templates` — list all `BlockTemplate` rows
+- [x] `PUT /api/v1/admin/settings/templates/:entry_type` — update default `blocks` for an entry type (admin role only)
 
 ### `MediaModule`
-- [ ] `POST /api/v1/admin/media/upload` — multipart upload to R2
-  - [ ] Validate file type: jpeg, png, webp, svg, mp4
-  - [ ] Validate file size: ≤ 5MB images, ≤ 50MB video
-  - [ ] Upload to R2, return CDN URL
-  - [ ] Insert `MediaAsset` row linking to entry (URL only — no alt text or caption here)
-- [ ] Note: alt text and caption are set per locale via `Translation.blocks` in `AdminEntryModule`
+- [x] `POST /api/v1/admin/media/upload` — multipart upload to R2
+  - [x] Validate file type: jpeg, png, webp, svg, mp4
+  - [x] Validate file size: ≤ 5MB images, ≤ 50MB video
+  - [x] Upload to R2, return CDN URL
+  - [x] Insert `MediaAsset` row linking to entry (URL only — no alt text or caption here)
+- [x] Note: alt text and caption are set per locale via `Translation.blocks` in `AdminEntryModule`
 
 ### `UserModule` (admin role only)
-- [ ] `GET /api/v1/admin/users` — list users
-- [ ] `POST /api/v1/admin/users` — create user
-- [ ] `PATCH /api/v1/admin/users/:id` — update role
+- [x] `GET /api/v1/admin/users` — list users
+- [x] `POST /api/v1/admin/users` — create user
+- [x] `PATCH /api/v1/admin/users/:id` — update role
 
 ---
 
@@ -265,12 +265,10 @@ Status legend: `[ ]` not started · `[x]` done · `[-]` in progress · `[~]` def
 
 ### Custom components
 - [ ] `EntryCard` — term, short definition (from `Translation.metadata.definition_short`), skill badge, origin badge, link
-- [ ] `SkillBadge` — colour-coded beginner/intermediate/advanced/expert
 - [ ] `LocaleBadge` — flag + locale code
 - [ ] `InlineEntryCard` — mini card for embedding in articles (rendered from `entry_link` TipTap node)
 - [ ] Block renderer components (used in entry detail):
   - [ ] `DefinitionBlock` — renders TipTap JSON; handles `entry_link` inline node → `InlineEntryCard`
-  - [ ] `TechniqueBlock` — name, difficulty badge, ordered steps
   - [ ] `MediaBlock` — image/diagram with locale-aware alt text and caption from `Translation.blocks`
   - [ ] `CalloutBlock` — tip/warning variant box
   - [ ] `RelatedBlock` — labelled link cards for synonym/antonym/prerequisite/variant relationships

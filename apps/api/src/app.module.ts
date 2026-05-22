@@ -1,10 +1,92 @@
 import { Module } from '@nestjs/common';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { CacheModule } from '@nestjs/cache-manager';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { createKeyv } from '@keyv/redis';
+import { CacheableMemory } from 'cacheable';
+import { Keyv } from 'keyv';
+
+// Infrastructure
+import { PrismaModule } from './prisma/prisma.module';
+import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter';
+import { ResponseTransformInterceptor } from './common/interceptors/response-transform.interceptor';
+
+// Auth
+import { AuthModule } from './auth/auth.module';
+import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
+import { RolesGuard } from './auth/guards/roles.guard';
+
+// Public modules
+import { CategoryModule } from './category/category.module';
+import { EntryModule } from './entry/entry.module';
+import { SearchModule } from './search/search.module';
+import { ArticleModule } from './article/article.module';
+import { CountryModule } from './country/country.module';
+import { LearnModule } from './learn/learn.module';
+import { ContributionModule } from './contribution/contribution.module';
+
+// Admin modules
+import { AdminQueueModule } from './admin/queue/admin-queue.module';
+import { AdminEntryModule } from './admin/entry/admin-entry.module';
+import { AdminBlockTemplateModule } from './admin/block-template/admin-block-template.module';
+import { UserModule } from './user/user.module';
+import { MediaModule } from './media/media.module';
+
+const REDIS_URL = process.env.REDIS_URL ?? 'redis://localhost:6379';
 
 @Module({
-  imports: [],
-  controllers: [AppController],
-  providers: [AppService],
+  imports: [
+    // Cache with Redis + in-memory fallback
+    CacheModule.registerAsync({
+      isGlobal: true,
+      useFactory: () => ({
+        stores: [
+          new Keyv({ store: new CacheableMemory({ ttl: 60_000, lruSize: 5000 }) }),
+          createKeyv(REDIS_URL),
+        ],
+      }),
+    }),
+
+    // Rate limiting
+    ThrottlerModule.forRoot({
+      throttlers: [{ ttl: 60_000, limit: 60 }],
+    }),
+
+    // Core
+    PrismaModule,
+    AuthModule,
+
+    // Public
+    CategoryModule,
+    EntryModule,
+    SearchModule,
+    ArticleModule,
+    CountryModule,
+    LearnModule,
+    ContributionModule,
+
+    // Admin
+    AdminQueueModule,
+    AdminEntryModule,
+    AdminBlockTemplateModule,
+    UserModule,
+    MediaModule,
+  ],
+  providers: [
+    // Global exception filter for Prisma errors
+    { provide: APP_FILTER, useClass: PrismaExceptionFilter },
+
+    // Global response transform
+    { provide: APP_INTERCEPTOR, useClass: ResponseTransformInterceptor },
+
+    // Global JWT guard (routes opt-out with @Public())
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
+
+    // Global roles guard
+    { provide: APP_GUARD, useClass: RolesGuard },
+
+    // Global throttler guard
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+  ],
 })
 export class AppModule {}
