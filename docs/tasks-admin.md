@@ -125,81 +125,81 @@ Status legend: `[ ]` not started · `[x]` done · `[-]` in progress · `[~]` def
 
 ### D1 — Entry list page (`/entries`)
 
-- [ ] Page title "Entries" + "New Entry" button (top right, blue, like reference image)
-- [ ] Stats row: total entry count with icon (like "120 Doctor" in reference)
-- [ ] Filter bar:
-  - [ ] Search input (filters by term client-side or via API `q` param)
-  - [ ] Status select: All / Draft / Review / Published / Deprecated
-  - [ ] Skill level select: All / Beginner / Intermediate / Advanced / Expert
-  - [ ] Origin language select: All / en / pl / no / de / fr
-- [ ] Data table (TanStack Query, paginated 20/page):
-  - [ ] Columns: checkbox, Term (en), Origin, Skill Level (badge), Status (badge), Category, Created At, Actions (⋮ menu)
-  - [ ] Status badge colours: draft=grey, review=yellow, published=green, deprecated=red
-  - [ ] Skill badge colours: beginner=green, intermediate=blue, advanced=orange, expert=red
-  - [ ] Row click → navigate to `/entries/[id]`
-  - [ ] ⋮ menu actions: Edit, Change Status, Delete (with confirm dialog)
-- [ ] Pagination controls (prev/next + page indicator)
-- [ ] Skeleton rows while loading
+- [x] Page title "Entries" + "New Entry" button (top right, blue, like reference image)
+- [x] Stats row: total entry count with icon (like "120 Doctor" in reference)
+- [x] Filter bar:
+  - [x] Search input (filters by term client-side or via API `q` param)
+  - [x] Status select: All / Draft / Review / Published / Deprecated
+  - [x] Skill level select: All / Beginner / Intermediate / Advanced / Expert
+  - [x] Origin language select: All / en / pl / no / de / fr
+- [x] Data table (TanStack Query, paginated 20/page):
+  - [x] Columns: Term (en), Origin, Skill Level (badge), Status (badge), Created At, Actions (⋮ menu)
+  - [x] Status badge colours: draft=grey, review=yellow, published=green, deprecated=red
+  - [x] Skill badge colours: beginner=green, intermediate=blue, advanced=orange, expert=red
+  - [x] Row click → navigate to `/entries/[id]`
+  - [x] ⋮ menu actions: Edit, Change Status, Delete (with confirm dialog)
+- [x] Pagination controls (prev/next + page indicator)
+- [x] Skeleton rows while loading
 
 ### D2 — Create entry page (`/entries/new`)
 
-- [ ] Form card layout
-- [ ] Fields:
-  - [ ] Entry type (select): stitch / technique / tool / tradition / yarn_weight
-  - [ ] Origin language (select): en / pl / no / de / fr
-  - [ ] Skill level (select)
-  - [ ] Short definition (textarea, English)
-  - [ ] Term — English (input)
-  - [ ] Slug — English (input, auto-generated from term, editable)
-- [ ] On save: `POST /api/v1/admin/entries` → redirect to `/entries/[id]`
-- [ ] Cancel button → back to `/entries`
-- [ ] Validation: all fields required, slug format check (lowercase, hyphens only)
+- [x] Form card layout
+- [x] Fields:
+  - [x] Entry type (select): stitch / technique / tool / tradition / yarn_weight
+  - [x] Origin language (select): en / pl 
+  - [x] Skill level (select)
+  - [x] Short definition (textarea, English)
+  - [x] Term — English (input)
+  - [x] Slug — English (input, auto-generated from term, editable)
+- [x] On save: `POST /api/v1/admin/entries` → redirect to `/entries/[id]`
+- [x] Cancel button → back to `/entries`
+- [x] Validation: all fields required, slug format check (lowercase, hyphens only)
 
 ### D3 — Entry editor page (`/entries/[id]`)
 
-- [ ] Page header: term (from `en` Translation) + status badge + "View on site" link
-- [ ] Tabbed interface (shadcn `Tabs`):
+- [x] Page header: term (from `en` Translation) + status badge + "View on site" link
+- [x] Tabbed interface (shadcn `Tabs`):
 
 #### D3a — Core tab
-- [ ] Edit `origin_language`, `metadata.skill_level`, `metadata.definition_short`
-- [ ] Status panel (right side or bottom):
-  - [ ] Current status badge
-  - [ ] Promote button: Draft→Review / Review→Published (role-gated)
-  - [ ] Deprecate button (with confirm dialog)
-- [ ] Save button → `PUT /api/v1/admin/entries/:id`
+- [x] Edit `origin_language`, `metadata.skill_level`, `metadata.definition_short`
+- [x] Status panel (right side or bottom):
+  - [x] Current status badge
+  - [x] Promote button: Draft→Review / Review→Published (role-gated)
+  - [x] Deprecate button (with confirm dialog)
+- [x] Save button → `PUT /api/v1/admin/entries/:id`
 
 #### D3b — Translations tab
-- [ ] List of locale tabs (en, pl, + any others present)
-- [ ] Per locale form:
-  - [ ] Term (input)
-  - [ ] Slug (input, warn on change)
-  - [ ] Abbreviation (input, optional)
-  - [ ] Short definition (textarea)
-  - [ ] Translation status badge (draft/reviewed/published)
-- [ ] Per block content editors (based on `content_blocks` layout):
-  - [ ] `definition` block: plain `<textarea>` for now (TipTap deferred to Phase F)
-  - [ ] `technique` block: name input, difficulty select, step list (add/remove/reorder)
-  - [ ] `media` block: alt text input, caption input (URL shown read-only)
-  - [ ] `callout` block: text input
-  - [ ] `related` / `pattern_usage`: read-only notice ("Managed in Related tab")
-- [ ] Save per locale → `PUT /api/v1/admin/entries/:id/translations/:locale`
+- [x] List of locale tabs (en, pl, + any others present)
+- [x] Per locale form:
+  - [x] Term (input)
+  - [x] Slug (input, warn on change)
+  - [x] Abbreviation (input, optional)
+  - [x] Short definition (textarea)
+  - [x] Translation status badge (draft/reviewed/published)
+- [x] Per block content editors (based on `content_blocks` layout):
+  - [x] `definition` block: plain `<textarea>` for now (TipTap deferred to Phase F)
+  - [~] `technique` block: name input, difficulty select, step list (add/remove/reorder)
+  - [x] `media` block: alt text input, caption input (URL shown read-only)
+  - [x] `callout` block: text input
+  - [x] `related` / `pattern_usage`: read-only notice ("Managed in Related tab")
+- [x] Save per locale → `PUT /api/v1/admin/entries/:id/translations/:locale`
 
 #### D3c — Related entries tab
-- [ ] Table of existing `RelatedEntry` rows: linked term (en), relation type, direction
-- [ ] Add relation: search entries by term (typeahead), select relation type, save
-- [ ] Remove relation: delete button with confirm
+- [~] Table of existing `RelatedEntry` rows: linked term (en), relation type, direction
+- [~] Add relation: search entries by term (typeahead), select relation type, save
+- [~] Remove relation: delete button with confirm
 
 #### D3d — Media tab
-- [ ] Grid of `MediaAsset` rows: thumbnail, URL, sort order
-- [ ] Upload new asset: drag-and-drop zone → `POST /api/v1/admin/media/upload`
-- [ ] Reorder assets (drag handles)
-- [ ] Delete asset (with confirm)
+- [x] Grid of `MediaAsset` rows: thumbnail, URL, sort order
+- [x] Upload new asset: drag-and-drop zone → `POST /api/v1/admin/media/upload`
+- [~] Reorder assets (drag handles)
+- [x] Delete asset (with confirm)
 
 #### D3e — Blocks tab (admin role only)
-- [ ] List of `content_blocks` with drag-to-reorder
-- [ ] Toggle `visible` per block
-- [ ] Add block type (select + add button)
-- [ ] Save → `PUT /api/v1/admin/entries/:id/blocks`
+- [x] List of `content_blocks` with drag-to-reorder
+- [x] Toggle `visible` per block
+- [x] Add block type (select + add button)
+- [x] Save → `PUT /api/v1/admin/entries/:id/blocks`
 
 ---
 

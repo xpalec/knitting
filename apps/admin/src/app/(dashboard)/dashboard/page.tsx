@@ -83,7 +83,7 @@ interface StatusConfig {
   className: string;
 }
 
-const STATUS_CONFIG: Record<string, StatusConfig> = {
+const STATUS_CONFIG: { [key: string]: StatusConfig | undefined } = {
   pending: {
     label: 'Pending',
     icon: Clock,
@@ -101,10 +101,10 @@ const STATUS_CONFIG: Record<string, StatusConfig> = {
   },
 };
 
-const DEFAULT_STATUS_CONFIG: StatusConfig = STATUS_CONFIG.pending;
+const DEFAULT_STATUS_CONFIG: StatusConfig = STATUS_CONFIG['pending'] as StatusConfig;
 
 function StatusBadge({ status }: { status: string }) {
-  const config: StatusConfig = STATUS_CONFIG[status] ?? DEFAULT_STATUS_CONFIG;
+  const config: StatusConfig = (STATUS_CONFIG[status] ?? DEFAULT_STATUS_CONFIG) as StatusConfig;
   const Icon = config.icon;
   return (
     <span
