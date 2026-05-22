@@ -114,10 +114,10 @@ Status legend: `[ ]` not started · `[x]` done · `[-]` in progress · `[~]` def
 
 ### C2 — Recent activity table
 
-- [ ] Fetch last 10 approved/rejected queue items
-- [ ] Table columns: Type (entry/translation/correction), Term, Action (approved/rejected), Reviewer, Date
-- [ ] Status badge: green "Approved" / red "Rejected"
-- [ ] Empty state: "No recent activity"
+- [x] Fetch last 10 approved/rejected queue items
+- [x] Table columns: Type (entry/translation/correction), Term, Action (approved/rejected), Reviewer, Date
+- [x] Status badge: green "Approved" / red "Rejected"
+- [x] Empty state: "No recent activity"
 
 ---
 

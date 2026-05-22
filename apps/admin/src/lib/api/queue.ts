@@ -8,6 +8,7 @@ export interface QueueEntry {
   type: "entry" | "translation" | "correction";
   status: QueueStatus;
   submitter_email?: string;
+  reviewer_email?: string;
   reviewer_note?: string;
   submitted_at: string;
   reviewed_at?: string;

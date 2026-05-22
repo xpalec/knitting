@@ -127,8 +127,12 @@ export default function DashboardPage() {
   });
 
   const { data: recentItems, isLoading: loadingRecent } = useQuery({
-    queryKey: ['dashboard', 'recent-queue'],
-    queryFn: () => apiGet<QueueEntry[]>('/api/v1/admin/queue/entries?limit=10'),
+    queryKey: ['dashboard', 'recent-activity'],
+    queryFn: () =>
+      apiGet<QueueEntry[]>('/api/v1/admin/queue/entries', {
+        status: 'approved,rejected',
+        limit: 10,
+      }),
   });
 
   return (
@@ -183,7 +187,7 @@ export default function DashboardPage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base font-semibold text-slate-800">
-            Recent Submissions
+            Recent Activity
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
@@ -210,10 +214,13 @@ export default function DashboardPage() {
                       Term
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                      Status
+                      Action
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                      Submitted
+                      Reviewer
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                      Date
                     </th>
                   </tr>
                 </thead>
@@ -223,11 +230,13 @@ export default function DashboardPage() {
                       (item.payload?.term as string) ??
                       (item.payload?.translated_term as string) ??
                       '—';
-                    const date = new Date(item.submitted_at).toLocaleDateString('en-GB', {
-                      day: 'numeric',
-                      month: 'short',
-                      year: 'numeric',
-                    });
+                    const date = item.reviewed_at
+                      ? new Date(item.reviewed_at).toLocaleDateString('en-GB', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                        })
+                      : '—';
                     return (
                       <tr key={item.id} className="hover:bg-slate-50 transition-colors">
                         <td className="px-4 py-3">
@@ -241,7 +250,10 @@ export default function DashboardPage() {
                         <td className="px-4 py-3">
                           <StatusBadge status={item.status} />
                         </td>
-                        <td className="px-4 py-3 text-slate-500">{date}</td>
+                        <td className="px-4 py-3 text-slate-500 max-w-[160px] truncate">
+                          {item.reviewer_email ?? '—'}
+                        </td>
+                        <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{date}</td>
                       </tr>
                     );
                   })}
