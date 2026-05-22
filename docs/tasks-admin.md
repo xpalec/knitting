@@ -236,15 +236,15 @@ Status legend: `[ ]` not started · `[x]` done · `[-]` in progress · `[~]` def
 
 ### F1 — Article list (`/articles`)
 
-- [ ] Table columns: Title, Slug, Tags (badges), Country, Author, Created at, Actions
-- [ ] "New Article" button → `/articles/new`
-- [ ] Row click → `/articles/[id]`
-- [ ] ⋮ menu: Edit, Delete (with confirm)
+- [x] Table columns: Title, Slug, Tags (badges), Country, Author, Created at, Actions
+- [x] "New Article" button → `/articles/new`
+- [x] Row click → `/articles/[id]`
+- [x] ⋮ menu: Edit, Delete (with confirm)
 
 ### F2 — Create / edit article (`/articles/new`, `/articles/[id]`)
 
-- [ ] Fields: title, slug (auto-generated), content (plain `<textarea>` for now), tags (multi-select), country (select), author (input), cover image (upload)
-- [ ] Save → `POST` or `PUT /api/v1/articles/:id`
+- [x] Fields: title, slug (auto-generated), content (plain `<textarea>` for now), tags (multi-select), country (select), author (input), cover image (upload)
+- [x] Save → `POST` or `PUT /api/v1/articles/:id`
 
 ---
 

@@ -1,4 +1,4 @@
-import { apiGet, apiGetWithMeta, apiPost, apiPut } from "./client";
+import { apiDelete, apiGet, apiGetWithMeta, apiPost, apiPut } from "./client";
 import type { ApiResponse } from "./client";
 
 export interface Article {
@@ -44,4 +44,7 @@ export const articlesApi = {
 
   updateArticle: (id: string, payload: UpdateArticlePayload): Promise<Article> =>
     apiPut<Article>(`/api/v1/articles/${id}`, payload),
+
+  deleteArticle: (id: string): Promise<void> =>
+    apiDelete<void>(`/api/v1/articles/${id}`),
 };

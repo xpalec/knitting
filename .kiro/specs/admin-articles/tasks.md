@@ -1,0 +1,87 @@
+# Implementation Tasks
+
+- [x] 1. Add deleteArticle to articles API client
+  - Add `deleteArticle(id: string): Promise<void>` to `articlesApi` in `src/lib/api/articles.ts`
+  - Import `apiDelete` from `./client` alongside existing imports
+  - Implementation: `deleteArticle: (id: string): Promise<void> => apiDelete<void>('/api/v1/articles/${id}')`
+  - Verify `apiDelete` is exported from `client.ts` (already used in entries editor for media deletion)
+  - **Requirements:** R1.12
+
+- [x] 2. Create TagsInput component
+  - Create `src/components/articles/tags-input.tsx`
+  - Props: `value: string[]`, `onChange: (tags: string[]) => void`, `disabled?: boolean`
+  - Render current tags as `<Badge variant="outline">` chips, each with an `×` remove button
+  - Include a text `<Input>` for entering new tags
+  - On `Enter` or `,` keydown: trim value, skip if empty or duplicate, add to array, clear input
+  - On `×` click: remove that tag from the array
+  - Use existing `Badge`, `Input`, `Button` from `src/components/ui/`
+  - **Requirements:** R6
+
+- [x] 3. Create CoverImageUpload component
+  - Create `src/components/articles/cover-image-upload.tsx`
+  - Props: `value: string | undefined`, `onChange: (url: string | undefined) => void`, `disabled?: boolean`
+  - No image state: file input button ("Choose image"), `accept="image/*"`
+  - Uploading state: spinner or "Uploading…" text, input disabled
+  - Image present state: `<img>` thumbnail (`max-h-40 rounded object-cover`), "Remove" button
+  - On file select: build `FormData`, call `mediaApi.uploadMedia(formData)`, on success call `onChange(asset.cdn_url ?? asset.url)`, on error `toast.error('Cover image upload failed')`
+  - On remove: call `onChange(undefined)`
+  - Import `mediaApi` from `src/lib/api/media`
+  - **Requirements:** R5
+
+- [x] 4. Create ArticleForm shared component
+  - Create `src/components/articles/article-form.tsx`
+  - Define `ArticleFormValues` interface: `{ title, slug, content, tags, country, author, cover_image_url }`
+  - Props: `initialValues?: Partial<ArticleFormValues>`, `onSubmit: (values: ArticleFormValues) => void`, `isSubmitting: boolean`, `submitLabel: string`, `onCancel: () => void`
+  - Implement `toSlug(title)` helper: lowercase, trim, remove non-alphanumeric (except hyphens), replace spaces with hyphens
+  - Auto-generate slug from title when `!slugManuallyEdited`; set `slugManuallyEdited = true` when user edits slug directly
+  - Fields in a `<Card>`: Title (required Input), Slug (required Input with hint), Content (optional Textarea rows=6), Tags (TagsInput), Country (Select with pl/no/de/gb/fr options + empty option), Author (optional Input), Cover Image (CoverImageUpload)
+  - Validate on submit only: title required, slug required + must match `^[a-z0-9]+(?:-[a-z0-9]+)*$`; show inline errors
+  - Footer: Cancel `<Button variant="outline">` + Submit `<Button type="submit">` with `submitLabel`
+  - Import `TagsInput` and `CoverImageUpload` from sibling files
+  - **Requirements:** R3, R4, R5, R6
+  - **Depends on:** 2, 3
+
+- [x] 5. Create Article List page
+  - Create `src/app/(dashboard)/articles/page.tsx` as a Client Component
+  - State: `searchInput`, `q` (debounced 300ms), `page` (resets to 1 on `q` change), `deleteTarget: Article | null`
+  - Query: `useQuery({ queryKey: ['articles', { page, limit: 20, q }], queryFn: () => articlesApi.listArticles(...) })`
+  - Page header: "Articles" h1 + "New Article" Button linking to `/articles/new` with Plus icon
+  - Filter bar in a Card: search Input with Search icon prefix
+  - Table columns: Title, Slug, Tags, Country, Author, Created At, Actions
+  - Tags cell: map tags to `<Badge variant="outline" className="text-xs">` inline; dash (`—`) if empty or no tags
+  - Created At: formatted with `toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' })`
+  - Actions cell: DropdownMenu with Edit (navigate to `/articles/[id]`) and Delete (set `deleteTarget`)
+  - Row click: `router.push('/articles/${article.id}')` — `e.stopPropagation()` on Actions cell
+  - Skeleton: 5 rows of skeleton cells while `isLoading`
+  - Empty state: FileX icon + "No articles found" when `articles.length === 0` and not loading
+  - Pagination: always rendered — prev/next buttons + "Page X of Y"; disabled at bounds
+  - Delete mutation: calls `articlesApi.deleteArticle(id)`, success toast + invalidate `['articles']` + clear `deleteTarget`; error toast on failure
+  - ConfirmDialog: open when `deleteTarget !== null`, title "Delete Article", description includes article title
+  - **Requirements:** R1, R2
+  - **Depends on:** 1
+
+- [x] 6. Create New Article page
+  - Create `src/app/(dashboard)/articles/new/page.tsx` as a Client Component
+  - Back link: ghost Button with ArrowLeft icon linking to `/articles`
+  - Page title: "New Article"
+  - Render `<ArticleForm>` with no `initialValues`, `submitLabel="Create Article"`
+  - Create mutation: calls `articlesApi.createArticle(values)`, on success `toast.success('Article created')` + `router.push('/articles/${article.id}')`, on error `toast.error('Failed to create article')`
+  - `onCancel`: `router.push('/articles')`
+  - Wrap form in `<div className="mx-auto max-w-2xl">`
+  - **Requirements:** R3
+  - **Depends on:** 4
+
+- [x] 7. Create Edit Article page
+  - Create `src/app/(dashboard)/articles/[id]/page.tsx` as a Client Component
+  - Use `use(params)` to unwrap `{ id }` from the Promise params
+  - Fetch: `useQuery({ queryKey: ['article', id], queryFn: () => articlesApi.getArticle(id) })`
+  - Loading state: Skeleton for title + Skeleton for form area
+  - Error state: Card with "Failed to load article." + Retry Button calling `refetch()`
+  - Back link: ghost Button with ArrowLeft icon linking to `/articles`
+  - Page title: `article.title`
+  - Render `<ArticleForm>` pre-populated with article values, `submitLabel="Save Article"`
+  - Update mutation: calls `articlesApi.updateArticle(id, values)`, on success `toast.success('Article saved')` + `queryClient.invalidateQueries({ queryKey: ['article', id] })`, on error `toast.error('Failed to save article')`
+  - `onCancel`: `router.push('/articles')`
+  - Wrap form in `<div className="mx-auto max-w-2xl">`
+  - **Requirements:** R4
+  - **Depends on:** 4
