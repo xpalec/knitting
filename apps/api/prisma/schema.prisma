@@ -1,0 +1,386 @@
+// Knitting Encyclopedia — Prisma Schema
+// Data model: 03-data-model.md v2.3
+// Generator: prisma-client (Prisma 7)
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum SkillLevel {
+  beginner
+  intermediate
+  advanced
+  expert
+}
+
+enum EntryStatus {
+  draft
+  review
+  published
+  deprecated
+}
+
+enum TranslationStatus {
+  draft
+  reviewed
+  published
+}
+
+enum RelationType {
+  synonym
+  antonym
+  prerequisite
+  variant_regional
+  variant_technique
+  broader
+  narrower
+}
+
+enum MediaType {
+  image
+  diagram
+  video_clip
+  chart
+}
+
+enum TagType {
+  fiber_type
+  needle_type
+  garment_part
+  style_tradition
+}
+
+enum ContributionType {
+  entry
+  translation
+  correction
+}
+
+enum UserRole {
+  editor
+  reviewer
+  admin
+}
+
+// ---------------------------------------------------------------------------
+// Entry
+// The core encyclopedia entry. No slug, no term — those live in Translation.
+// ---------------------------------------------------------------------------
+
+model Entry {
+  id              String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// BCP-47 code of the tradition this entry originates from: en, pl, no, de, fr
+  origin_language String
+  status          EntryStatus @default(draft)
+  /// Language-independent structured properties (skill_level, definition_short, etc.)
+  metadata        Json        @default("{}")
+  /// Ordered ContentBlock[] layout manifest — admin-controlled; no translated content here
+  content_blocks  Json        @default("[]")
+  created_at      DateTime    @default(now()) @db.Timestamptz
+  updated_at      DateTime    @updatedAt @db.Timestamptz
+  published_at    DateTime?   @db.Timestamptz
+
+  translations  Translation[]
+  media_assets  MediaAsset[]
+  pattern_usage PatternUsage[]
+  categories    EntryCategory[]
+  tags          EntryTag[]
+  related_from  RelatedEntry[]  @relation("RelatedFrom")
+  related_to    RelatedEntry[]  @relation("RelatedTo")
+  contributions Contribution[]
+  learning_path_entries LearningPathEntry[]
+
+  @@index([origin_language])
+  @@map("entry")
+}
+
+// ---------------------------------------------------------------------------
+// Translation
+// All locale-specific content: display name, slug, metadata, block content.
+// One row per locale per entry.
+// ---------------------------------------------------------------------------
+
+model Translation {
+  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  entry_id        String            @db.Uuid
+  /// BCP-47 locale code: en, pl, de, no, fr, en-US, en-GB
+  locale          String
+  /// Locale-specific public URL slug — immutable once published
+  slug            String
+  /// Display name in this locale
+  term            String
+  /// Locale-specific structured properties: abbreviation, definition_short
+  metadata        Json              @default("{}")
+  /// Translated block content keyed by ContentBlock.id
+  blocks          Json              @default("{}")
+  translator_note String?
+  status          TranslationStatus @default(draft)
+  /// Maintained by trigger: indexes term + metadata->>'definition_short' + all text nodes in blocks
+  search_vector   Unsupported("tsvector")?
+
+  entry Entry @relation(fields: [entry_id], references: [id], onDelete: Cascade)
+
+  @@unique([entry_id, locale])
+  @@unique([locale, slug])
+  @@index([search_vector], type: Gin)
+  @@index([blocks(ops: JsonbOps)], type: Gin)
+  @@index([metadata(ops: JsonbOps)], type: Gin)
+  @@map("translation")
+}
+
+// ---------------------------------------------------------------------------
+// Category
+// Hierarchical taxonomy via self-join parent_id. 2–3 levels recommended.
+// ---------------------------------------------------------------------------
+
+model Category {
+  id         String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name       String
+  slug       String  @unique
+  parent_id  String? @db.Uuid
+  icon       String?
+  sort_order Int     @default(0)
+
+  parent   Category?  @relation("CategoryChildren", fields: [parent_id], references: [id])
+  children Category[] @relation("CategoryChildren")
+  entries  EntryCategory[]
+
+  @@map("category")
+}
+
+model EntryCategory {
+  entry_id    String @db.Uuid
+  category_id String @db.Uuid
+
+  entry    Entry    @relation(fields: [entry_id], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [category_id], references: [id], onDelete: Cascade)
+
+  @@id([entry_id, category_id])
+  @@map("entry_category")
+}
+
+// ---------------------------------------------------------------------------
+// Tag
+// Lightweight cross-cutting labels.
+// ---------------------------------------------------------------------------
+
+model Tag {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String   @unique
+  type      TagType?
+  color_hex String?
+
+  entries  EntryTag[]
+  articles ArticleTag[]
+
+  @@map("tag")
+}
+
+model EntryTag {
+  entry_id String @db.Uuid
+  tag_id   String @db.Uuid
+
+  entry Entry @relation(fields: [entry_id], references: [id], onDelete: Cascade)
+  tag   Tag   @relation(fields: [tag_id], references: [id], onDelete: Cascade)
+
+  @@id([entry_id, tag_id])
+  @@map("entry_tag")
+}
+
+// ---------------------------------------------------------------------------
+// RelatedEntry
+// Self-join on Entry modelling relationships between terms.
+// ---------------------------------------------------------------------------
+
+model RelatedEntry {
+  id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  entry_id      String       @db.Uuid
+  related_id    String       @db.Uuid
+  relation_type RelationType
+  /// "symmetric" or "directed"
+  direction     String       @default("symmetric")
+  note          String?
+
+  entry   Entry @relation("RelatedFrom", fields: [entry_id], references: [id], onDelete: Cascade)
+  related Entry @relation("RelatedTo", fields: [related_id], references: [id], onDelete: Cascade)
+
+  @@map("related_entry")
+}
+
+// ---------------------------------------------------------------------------
+// MediaAsset
+// CDN URL is locale-independent. Alt text and caption live in Translation.blocks.
+// ---------------------------------------------------------------------------
+
+model MediaAsset {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  entry_id   String    @db.Uuid
+  type       MediaType
+  /// CDN URL (Cloudflare R2) — locale-independent
+  url        String
+  sort_order Int       @default(0)
+
+  entry Entry @relation(fields: [entry_id], references: [id], onDelete: Cascade)
+
+  @@map("media_asset")
+}
+
+// ---------------------------------------------------------------------------
+// PatternUsage
+// Records how an entry appears in real-world knitting patterns.
+// ---------------------------------------------------------------------------
+
+model PatternUsage {
+  id           String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  entry_id     String      @db.Uuid
+  pattern_name String
+  /// FK to a future Pattern master table — nullable until that table exists
+  pattern_id   String?     @db.Uuid
+  /// How the entry is specifically used — the most editorially valuable field
+  context_note String
+  /// How many times the entry appears; drives usage bar charts
+  frequency    Int
+  /// Context-sensitive override of Entry.metadata.skill_level
+  skill_level  SkillLevel?
+
+  entry Entry @relation(fields: [entry_id], references: [id], onDelete: Cascade)
+
+  @@map("pattern_usage")
+}
+
+// ---------------------------------------------------------------------------
+// BlockTemplate
+// Default content_blocks array per entry type. Applied when creating new entries.
+// Changes do NOT retroactively update existing entries.
+// ---------------------------------------------------------------------------
+
+model BlockTemplate {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// e.g. stitch, technique, tool, tradition, yarn_weight
+  entry_type String   @unique
+  /// Default ContentBlock[] — all visible: true, block IDs pre-generated, no content
+  blocks     Json     @default("[]")
+  updated_at DateTime @updatedAt @db.Timestamptz
+
+  @@map("block_template")
+}
+
+// ---------------------------------------------------------------------------
+// Article
+// Long-form editorial content — technique deep-dives, regional histories.
+// ---------------------------------------------------------------------------
+
+model Article {
+  id                   String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// Canonical English slug — immutable
+  slug                 String      @unique
+  title                String
+  /// TipTap JSON — extended node schema (heading, paragraph, image, entry_card, etc.)
+  content              Json
+  cover_image_url      String?
+  author               String
+  country_code         String?
+  /// Denormalised; computed on save
+  reading_time_minutes Int
+  status               EntryStatus @default(draft)
+  published_at         DateTime?   @db.Timestamptz
+  created_at           DateTime    @default(now()) @db.Timestamptz
+  updated_at           DateTime    @updatedAt @db.Timestamptz
+
+  tags ArticleTag[]
+
+  @@map("article")
+}
+
+model ArticleTag {
+  article_id String @db.Uuid
+  tag_id     String @db.Uuid
+
+  article Article @relation(fields: [article_id], references: [id], onDelete: Cascade)
+  tag     Tag     @relation(fields: [tag_id], references: [id], onDelete: Cascade)
+
+  @@id([article_id, tag_id])
+  @@map("article_tag")
+}
+
+// ---------------------------------------------------------------------------
+// LearningPath
+// Curated ordered sequences of entries.
+// ---------------------------------------------------------------------------
+
+model LearningPath {
+  id                String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  slug              String     @unique
+  title             String
+  description       String
+  skill_level_min   SkillLevel
+  skill_level_max   SkillLevel
+  /// Denormalised; computed from entry count
+  estimated_minutes Int
+  published         Boolean    @default(false)
+
+  entries LearningPathEntry[]
+
+  @@map("learning_path")
+}
+
+model LearningPathEntry {
+  path_id    String @db.Uuid
+  entry_id   String @db.Uuid
+  sort_order Int
+
+  path  LearningPath @relation(fields: [path_id], references: [id], onDelete: Cascade)
+  entry Entry        @relation(fields: [entry_id], references: [id], onDelete: Cascade)
+
+  @@id([path_id, entry_id])
+  @@map("learning_path_entry")
+}
+
+// ---------------------------------------------------------------------------
+// Contribution
+// Pending public submissions — entries, translations, corrections.
+// ---------------------------------------------------------------------------
+
+model Contribution {
+  id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  type            ContributionType
+  /// pending | approved | rejected
+  status          String           @default("pending")
+  /// Submitted data, shaped per type
+  payload         Json
+  /// Set for translation and correction submissions
+  entry_id        String?          @db.Uuid
+  submitter_email String?
+  reviewer_note   String?
+  submitted_at    DateTime         @default(now()) @db.Timestamptz
+  reviewed_at     DateTime?        @db.Timestamptz
+
+  entry Entry? @relation(fields: [entry_id], references: [id], onDelete: SetNull)
+
+  @@map("contribution")
+}
+
+// ---------------------------------------------------------------------------
+// User
+// Editorial team members. Not exposed to public readers.
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email         String   @unique
+  name          String
+  role          UserRole
+  password_hash String
+  created_at    DateTime @default(now()) @db.Timestamptz
+
+  @@map("user")
+}

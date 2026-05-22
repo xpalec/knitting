@@ -77,40 +77,40 @@ Status legend: `[ ]` not started · `[x]` done · `[-]` in progress · `[~]` def
 - [x] Confirm all schemas compile and export correctly
 
 ### `apps/api` — Prisma schema
-- [ ] Install Prisma, initialise with PostgreSQL provider
-- [ ] Define `schema.prisma`:
-  - [ ] Enums: `SkillLevel`, `EntryStatus`, `TranslationStatus`, `RelationType`, `MediaType`, `TagType`, `ContributionType`, `UserRole`
-  - [ ] `Entry` model — `id` (UUID v7), `origin_language` (NOT NULL), `status`, `metadata` (Json), `content_blocks` (Json), timestamps. **No `slug`, `term`, or `search_vector` fields.**
-  - [ ] `Translation` model — `entry_id` FK, `locale`, `slug`, `term`, `metadata` (Json), `blocks` (Json), `translator_note`, `status`, `search_vector` (Unsupported("tsvector")); unique on `(entry_id, locale)` and `(locale, slug)`
-  - [ ] `Category` model with self-referential `parent_id`
-  - [ ] `EntryCategory` join model
-  - [ ] `Tag` model
-  - [ ] `EntryTag` join model
-  - [ ] `RelatedEntry` self-join model with `relation_type` and `direction`
-  - [ ] `MediaAsset` model — `entry_id`, `type`, `url`, `sort_order`. **No `alt_text` or `caption` — locale-specific; live in `Translation.blocks`.**
-  - [ ] `PatternUsage` model
-  - [ ] `BlockTemplate` model — `entry_type` (unique), `blocks` (Json default `[]`), `updated_at`
-  - [ ] `Article` model
-  - [ ] `ArticleTag` join model
-  - [ ] `LearningPath` model
-  - [ ] `LearningPathEntry` join model (with `sort_order`)
-  - [ ] `Contribution` model — `type`, `status`, `payload` (Json), `entry_id` nullable FK, `submitter_email`, `reviewer_note`, timestamps
-  - [ ] `User` model with `role` enum
-- [ ] Run `prisma migrate dev --name init` successfully
-- [ ] Add raw SQL to migration: `search_vector` trigger on `Translation` (fires on INSERT/UPDATE; extracts all `text` nodes from `blocks` via `jsonb_path_query`; combines with `term` and `metadata->>'definition_short'`; calls `to_tsvector` with locale-appropriate dictionary)
-- [ ] Add GIN index on `Translation.search_vector`
-- [ ] Add GIN index on `Translation.blocks`
-- [ ] Add GIN index on `Translation.metadata`
-- [ ] Add GIN index on `Entry.metadata`
-- [ ] Add index on `Entry.origin_language`
-- [ ] Create `prisma/seed.ts`:
-  - [ ] Seed `BlockTemplate` rows for entry types: `stitch`, `technique`, `tool`, `tradition`, `yarn_weight`
-  - [ ] Seed ~20 `Entry` rows across 5 `origin_language` values (`en`, `pl`, `no`, `de`, `fr`)
-  - [ ] Each entry: `content_blocks` seeded from matching `BlockTemplate`
-  - [ ] Each entry: at minimum `en` Translation row with `term`, `slug`, `metadata.definition_short`, and `blocks` content per block ID
-  - [ ] Each entry: at minimum `pl` Translation row with `term`, `slug`, `metadata.abbreviation`, and `blocks` content
-  - [ ] Verify `search_vector` is populated on all seeded `Translation` rows
-- [ ] Run seed script successfully
+- [x] Install Prisma, initialise with PostgreSQL provider
+- [x] Define `schema.prisma`:
+  - [x] Enums: `SkillLevel`, `EntryStatus`, `TranslationStatus`, `RelationType`, `MediaType`, `TagType`, `ContributionType`, `UserRole`
+  - [x] `Entry` model — `id` (UUID v7), `origin_language` (NOT NULL), `status`, `metadata` (Json), `content_blocks` (Json), timestamps. **No `slug`, `term`, or `search_vector` fields.**
+  - [x] `Translation` model — `entry_id` FK, `locale`, `slug`, `term`, `metadata` (Json), `blocks` (Json), `translator_note`, `status`, `search_vector` (Unsupported("tsvector")); unique on `(entry_id, locale)` and `(locale, slug)`
+  - [x] `Category` model with self-referential `parent_id`
+  - [x] `EntryCategory` join model
+  - [x] `Tag` model
+  - [x] `EntryTag` join model
+  - [x] `RelatedEntry` self-join model with `relation_type` and `direction`
+  - [x] `MediaAsset` model — `entry_id`, `type`, `url`, `sort_order`. **No `alt_text` or `caption` — locale-specific; live in `Translation.blocks`.**
+  - [x] `PatternUsage` model
+  - [x] `BlockTemplate` model — `entry_type` (unique), `blocks` (Json default `[]`), `updated_at`
+  - [x] `Article` model
+  - [x] `ArticleTag` join model
+  - [x] `LearningPath` model
+  - [x] `LearningPathEntry` join model (with `sort_order`)
+  - [x] `Contribution` model — `type`, `status`, `payload` (Json), `entry_id` nullable FK, `submitter_email`, `reviewer_note`, timestamps
+  - [x] `User` model with `role` enum
+- [x] Run `prisma migrate dev --name init` successfully
+- [x] Add raw SQL to migration: `search_vector` trigger on `Translation` (fires on INSERT/UPDATE; extracts all `text` nodes from `blocks` via `jsonb_path_query`; combines with `term` and `metadata->>'definition_short'`; calls `to_tsvector` with locale-appropriate dictionary)
+- [x] Add GIN index on `Translation.search_vector`
+- [x] Add GIN index on `Translation.blocks`
+- [x] Add GIN index on `Translation.metadata`
+- [x] Add GIN index on `Entry.metadata`
+- [x] Add index on `Entry.origin_language`
+- [x] Create `prisma/seed.ts`:
+  - [x] Seed `BlockTemplate` rows for entry types: `stitch`, `technique`, `tool`, `tradition`, `yarn_weight`
+  - [~] Seed ~20 `Entry` rows across 5 `origin_language` values (`en`, `pl`, `no`, `de`, `fr`) — 3 minimal entries seeded (`en` + `pl` origin only); expand when needed
+  - [x] Each entry: `content_blocks` seeded from matching `BlockTemplate`
+  - [x] Each entry: at minimum `en` Translation row with `term`, `slug`, `metadata.definition_short`, and `blocks` content per block ID
+  - [x] Each entry: at minimum `pl` Translation row with `term`, `slug`, `metadata.abbreviation`, and `blocks` content
+  - [x] Verify `search_vector` is populated on all seeded `Translation` rows
+- [x] Run seed script successfully
 
 ---
 

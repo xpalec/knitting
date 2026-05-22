@@ -1,161 +1,116 @@
-# Turborepo starter
+# European Knitting Encyclopedia
 
-This Turborepo starter is maintained by the Turborepo core team.
+Monorepo for the European Knitting Encyclopedia — a multilingual reference for knitting terms, techniques, and traditions.
 
-## Using this example
+## Apps
 
-Run the following command:
+| App | Port | Description |
+|---|---|---|
+| `apps/knitting` | 3000 | Public encyclopedia (Next.js) |
+| `apps/admin` | 3001 | Editorial dashboard (Next.js) |
+| `apps/api` | 4000 | NestJS backend API |
 
-```sh
-npx create-turbo@latest
-```
+## Prerequisites
 
-## What's inside?
+- [Node.js](https://nodejs.org/) 20+
+- [pnpm](https://pnpm.io/) 9+
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 
-This Turborepo is set up for the European Knitting Encyclopedia monorepo (see `docs/`).
+## Getting started
 
-### Apps and packages
-
-Applications under `apps/*` arrive in Phase 0 scaffolding (`knitting`, `admin`, `api`). Shared workspaces:
-
-- `@knitting/types` — shared types and schemas (stub)
-- `@knitting/ui` — shared UI primitives (stub)
-- `@knitting/config-typescript` — `tsconfig` presets (`base`, `nextjs`, `nestjs`)
-- `@knitting/config-eslint` — flat ESLint (`base`, `next`, `nestjs`, `react-library`)
-- `@knitting/config-tailwind` — design tokens and Tailwind preset
-
-Each package targets [TypeScript](https://www.typescriptlang.org/).
-
-### Utilities
-
-This Turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
+### 1. Install dependencies
 
 ```sh
-cd my-turborepo
-turbo build
+pnpm install
 ```
 
-Without global `turbo`, use your package manager:
+### 2. Set up environment variables
+
+Copy the example env files for each app:
 
 ```sh
-cd my-turborepo
-npx turbo build
-pnpm dlx turbo build
-pnpm exec turbo build
+copy apps\api\.env.example apps\api\.env
+copy apps\knitting\.env.example apps\knitting\.env
+copy apps\admin\.env.example apps\admin\.env
 ```
 
-You can build a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
+### 3. Start local services (Postgres + Redis)
 
 ```sh
-turbo build --filter=docs
+docker compose up -d
 ```
 
-Without global `turbo`:
+This starts:
+- **Postgres 18** on `localhost:5432` — database `knitting`, user `knitting`, password `knitting`
+- **Redis 8** on `localhost:6379`
+
+To stop services:
 
 ```sh
-npx turbo build --filter=docs
-pnpm exec turbo build --filter=docs
-pnpm exec turbo build --filter=docs
+docker compose down
 ```
 
-### Develop
-
-To develop all apps and packages, run the following command:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
+### 4. Run database migrations
 
 ```sh
-cd my-turborepo
-turbo dev
+pnpm --filter=api prisma migrate deploy
 ```
 
-Without global `turbo`, use your package manager:
+### 5. Seed the database
 
 ```sh
-cd my-turborepo
-npx turbo dev
-pnpm exec turbo dev
-pnpm exec turbo dev
+pnpm --filter=api prisma db seed
 ```
 
-You can develop a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+Seeds 5 block templates and 3 sample entries (Yarn Over, K2tog, Brioche Stitch) with English and Polish translations.
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
+### 6. Start all apps
 
 ```sh
-turbo dev --filter=web
+pnpm dev
 ```
 
-Without global `turbo`:
+Or start a single app:
 
 ```sh
-npx turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-pnpm exec turbo dev --filter=web
+pnpm --filter=knitting dev   # public encyclopedia → http://localhost:3000
+pnpm --filter=admin dev      # admin dashboard    → http://localhost:3001
+pnpm --filter=api dev        # API                → http://localhost:4000
 ```
 
-### Remote Caching
+## Database access (pgAdmin)
 
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
+If you have pgAdmin running, add a new server with these connection details:
 
-Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
+| Field | Value |
+|---|---|
+| Host | `host.docker.internal` |
+| Port | `5432` |
+| Database | `knitting` |
+| Username | `knitting` |
+| Password | `knitting` |
 
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
+## Other commands
 
 ```sh
-cd my-turborepo
-turbo login
+# Type-check all packages
+pnpm typecheck
+
+# Lint all packages
+pnpm lint
+
+# Build all packages
+pnpm build
+
+# Generate Prisma client after schema changes
+pnpm --filter=api prisma generate
+
+# Open Prisma Studio (visual DB browser)
+pnpm --filter=api prisma studio
 ```
 
-Without global `turbo`, use your package manager:
+## Docs
 
-```sh
-cd my-turborepo
-npx turbo login
-pnpm exec turbo login
-pnpm exec turbo login
-```
-
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo link
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo link
-pnpm exec turbo link
-pnpm exec turbo link
-```
-
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.dev/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.dev/docs/reference/configuration)
-- [CLI Usage](https://turborepo.dev/docs/reference/command-line-reference)
+- [`docs/implementation-plan.md`](docs/implementation-plan.md) — phase-by-phase build plan
+- [`docs/tasks.md`](docs/tasks.md) — full task checklist
+- [`docs/03-data-model.md`](docs/03-data-model.md) — database schema reference (v2.3)
