@@ -1,4 +1,4 @@
-import { apiGet, apiGetWithMeta, apiUpload } from "./client";
+import { apiGet, apiGetWithMeta, apiUpload, apiDelete } from "./client";
 import type { ApiResponse } from "./client";
 
 export type MediaType = "image" | "diagram" | "video";
@@ -32,4 +32,7 @@ export const mediaApi = {
 
   uploadMedia: (formData: FormData): Promise<MediaAsset> =>
     apiUpload<MediaAsset>("/api/v1/admin/media/upload", formData),
+
+  deleteMedia: (id: string): Promise<void> =>
+    apiDelete(`/api/v1/admin/media/${id}`),
 };

@@ -250,11 +250,11 @@ Status legend: `[ ]` not started · `[x]` done · `[-]` in progress · `[~]` def
 
 ## Phase G — Media library (`/media`)
 
-- [ ] Grid view of all `MediaAsset` rows (thumbnail, type badge, linked entry term)
-- [ ] Filter bar: type (image / diagram / video)
-- [ ] Upload button → drag-and-drop dialog → `POST /api/v1/admin/media/upload`
-- [ ] Asset card actions: copy CDN URL, go to linked entry editor
-- [ ] Skeleton grid while loading
+- [x] Grid view of all `MediaAsset` rows (thumbnail, type badge, linked entry term)
+- [x] Filter bar: type (image / diagram / video)
+- [x] Upload button → drag-and-drop dialog → `POST /api/v1/admin/media/upload`
+- [x] Asset card actions: copy CDN URL, go to linked entry editor
+- [x] Skeleton grid while loading
 
 ---
 
