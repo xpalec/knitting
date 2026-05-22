@@ -29,6 +29,7 @@ import { ContributionModule } from './contribution/contribution.module';
 import { AdminQueueModule } from './admin/queue/admin-queue.module';
 import { AdminEntryModule } from './admin/entry/admin-entry.module';
 import { AdminBlockTemplateModule } from './admin/block-template/admin-block-template.module';
+import { AdminStatsModule } from './admin/stats/admin-stats.module';
 import { UserModule } from './user/user.module';
 import { MediaModule } from './media/media.module';
 
@@ -69,6 +70,7 @@ const REDIS_URL = process.env.REDIS_URL ?? 'redis://localhost:6379';
     AdminQueueModule,
     AdminEntryModule,
     AdminBlockTemplateModule,
+    AdminStatsModule,
     UserModule,
     MediaModule,
   ],

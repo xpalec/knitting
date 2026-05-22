@@ -4,6 +4,7 @@
  * Run: pnpm prisma db seed
  */
 import 'dotenv/config';
+import * as bcrypt from 'bcrypt';
 import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../src/generated/prisma/client';
@@ -161,8 +162,33 @@ async function main() {
     SELECT COUNT(*)::bigint AS count FROM translation WHERE search_vector IS NOT NULL
   `;
   console.log(`  search_vector populated on ${result[0].count} Translation rows`);
+
+  // Users
+  for (const u of USERS) {
+    const password_hash = await bcrypt.hash(u.password, 12);
+    await prisma.user.upsert({
+      where: { email: u.email },
+      update: {},
+      create: {
+        email: u.email,
+        name: u.name,
+        role: u.role as never,
+        password_hash,
+      },
+    });
+  }
+  console.log(`  ${USERS.length} User rows (admin@knitting.local / admin123, editor@knitting.local / editor123)`);
+
   console.log('Done.');
 }
+
+// ---------------------------------------------------------------------------
+// Users
+// ---------------------------------------------------------------------------
+const USERS = [
+  { email: 'admin@knitting.local',  name: 'Admin',        role: 'admin',    password: 'admin123' },
+  { email: 'editor@knitting.local', name: 'Editor',       role: 'editor',   password: 'editor123' },
+];
 
 main()
   .catch((e) => { console.error(e); process.exit(1); })

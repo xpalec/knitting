@@ -8,7 +8,7 @@ Monorepo for the European Knitting Encyclopedia — a multilingual reference for
 |---|---|---|
 | `apps/knitting` | 3000 | Public encyclopedia (Next.js) |
 | `apps/admin` | 3001 | Editorial dashboard (Next.js) |
-| `apps/api` | 4000 | NestJS backend API |
+| `apps/api` | 3002 | NestJS backend API |
 
 ## Prerequisites
 
@@ -64,6 +64,13 @@ pnpm --filter=api prisma db seed
 
 Seeds 5 block templates and 3 sample entries (Yarn Over, K2tog, Brioche Stitch) with English and Polish translations.
 
+Also seeds 2 editorial users for the admin dashboard:
+
+| Email | Password | Role |
+|---|---|---|
+| `admin@knitting.local` | `admin123` | admin |
+| `editor@knitting.local` | `editor123` | editor |
+
 ### 6. Start all apps
 
 ```sh
@@ -75,7 +82,7 @@ Or start a single app:
 ```sh
 pnpm --filter=knitting dev   # public encyclopedia → http://localhost:3000
 pnpm --filter=admin dev      # admin dashboard    → http://localhost:3001
-pnpm --filter=api dev        # API                → http://localhost:4000
+pnpm --filter=api dev        # API                → http://localhost:3002
 ```
 
 ## Database access (pgAdmin)
