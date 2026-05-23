@@ -684,12 +684,12 @@ export default function EntryEditorPage({ params }: { params: Promise<{ id: stri
       <PageHeader entry={entry} />
       <Separator />
       <Tabs defaultValue="core">
-        <TabsList>
-          <TabsTrigger value="core">Core</TabsTrigger>
-          <TabsTrigger value="translations">Translations</TabsTrigger>
-          <TabsTrigger value="related">Related</TabsTrigger>
-          <TabsTrigger value="media">Media</TabsTrigger>
-          {isAdmin && <TabsTrigger value="blocks">Blocks</TabsTrigger>}
+        <TabsList variant="line">
+          <TabsTrigger variant="line" value="core">Core</TabsTrigger>
+          <TabsTrigger variant="line" value="translations">Translations</TabsTrigger>
+          <TabsTrigger variant="line" value="related">Related</TabsTrigger>
+          <TabsTrigger variant="line" value="media">Media</TabsTrigger>
+          {isAdmin && <TabsTrigger variant="line" value="blocks">Blocks</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="core">
