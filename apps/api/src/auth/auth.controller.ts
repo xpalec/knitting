@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Post,
@@ -47,6 +48,12 @@ export class AuthController {
   logout(@Res({ passthrough: true }) res: Response): { message: string } {
     res.clearCookie(COOKIE_NAME, COOKIE_OPTIONS);
     return { message: 'Logged out' };
+  }
+
+  @Get('me')
+  @ApiOperation({ summary: 'Return the current authenticated user from JWT' })
+  me(@Req() req: Request & { user: JwtPayload }): { id: string; email: string; role: string } {
+    return { id: req.user.sub, email: req.user.email, role: req.user.role };
   }
 
   @Post('refresh')

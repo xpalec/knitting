@@ -9,23 +9,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useAuthStore } from '@/store/auth';
 import type { UserRole } from '@/store/auth';
 
-/** Decode the JWT payload (base64url) without verifying signature — client-side only */
-function decodeJwtPayload(token: string): { sub: string; email: string; role: UserRole } | null {
-  try {
-    const base64 = token.split('.')[1]?.replace(/-/g, '+').replace(/_/g, '/') ?? '';
-    const json = atob(base64);
-    return JSON.parse(json) as { sub: string; email: string; role: UserRole };
-  } catch {
-    return null;
-  }
-}
-
-/** Read a cookie value by name from document.cookie */
-function getCookie(name: string): string | null {
-  const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
-  return match ? decodeURIComponent(match[1]!) : null;
-}
-
 export default function LoginPage() {
   const router = useRouter();
   const setUser = useAuthStore((s) => s.setUser);
@@ -48,20 +31,18 @@ export default function LoginPage() {
       });
 
       if (!res.ok) {
-        const body = await res.json().catch(() => ({})) as { message?: string };
-        throw new Error(body.message ?? 'Invalid credentials');
+        const body = await res.json().catch(() => ({})) as { message?: string; data?: { message?: string } };
+        throw new Error(body.data?.message ?? body.message ?? 'Invalid credentials');
       }
 
-      // Cookie is now set by the API — decode JWT payload to get user info
-      const token = getCookie('access_token');
-      const payload = token ? decodeJwtPayload(token) : null;
-
-      if (payload) {
-        setUser({ id: payload.sub, email: payload.email, role: payload.role });
-      } else {
-        // Fallback: store email from form if JWT decode fails
-        setUser({ id: '', email, role: 'editor' });
-      }
+      // Cookie is now set — fetch the current user from /me
+      const meRes = await fetch(`${apiBase}/api/v1/auth/me`, {
+        credentials: 'include',
+      });
+      if (!meRes.ok) throw new Error('Failed to load user profile');
+      const meBody = await meRes.json() as { data: { id: string; email: string; role: UserRole } };
+      const u = meBody.data;
+      setUser({ id: u.id, email: u.email, role: u.role });
 
       router.push('/dashboard');
     } catch (err) {
