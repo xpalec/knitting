@@ -2,6 +2,11 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsIn, IsInt, IsOptional, IsString, IsUUID, MaxLength, Min } from 'class-validator';
 
 export class UpdateCategoryDto {
+  @ApiPropertyOptional({ enum: ['entry', 'abbreviation', 'article'] })
+  @IsOptional()
+  @IsIn(['entry', 'abbreviation', 'article'])
+  type?: string;
+
   @ApiPropertyOptional({
     description: 'Move to a different parent. Pass null to promote to top-level.',
     example: 'a1b2c3d4-...',

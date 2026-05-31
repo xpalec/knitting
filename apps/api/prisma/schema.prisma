@@ -40,6 +40,12 @@ enum CategoryStatus {
   published
 }
 
+enum CategoryType {
+  entry
+  abbreviation
+  article
+}
+
 enum RelationType {
   synonym
   antonym
@@ -150,6 +156,7 @@ model Translation {
 
 model Category {
   id              String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  type            CategoryType
   parent_id       String?        @db.Uuid
   icon            String?
   sort_order      Int            @default(0)
@@ -169,6 +176,8 @@ model Category {
   translations CategoryTranslation[]
 
   @@index([parent_id])
+  @@index([type])
+  @@index([status])
   @@map("category")
 }
 

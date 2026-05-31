@@ -8,27 +8,27 @@ Implement the Categories management section across three layers: API (NestJS/Pri
 
 ## Tasks
 
-- [ ] 1. Add `type` field to Prisma schema and generate migration
+- [x] 1. Add `type` field to Prisma schema and generate migration
   - Add `CategoryType` enum (`entry`, `abbreviation`, `article`) to `apps/api/prisma/schema.prisma`
   - Add `type CategoryType` field to the `Category` model with `@@index([type])`
   - Run `pnpm prisma migrate dev --name add_category_type` inside `apps/api`
   - Regenerate the Prisma client (`pnpm prisma generate`)
   - _Requirements: 1.1, 1.2_
 
-- [ ] 2. Update API DTOs and service to support `type` and filter params
-  - [ ] 2.1 Add `type` to `CreateCategoryDto` and `UpdateCategoryDto`
+- [x] 2. Update API DTOs and service to support `type` and filter params
+  - [x] 2.1 Add `type` to `CreateCategoryDto` and `UpdateCategoryDto`
     - In `create-category.dto.ts`: add required `@IsIn(['entry','abbreviation','article']) type: string` with `@ApiProperty`
     - In `update-category.dto.ts`: add optional `@IsOptional() @IsIn(['entry','abbreviation','article']) type?: string` with `@ApiPropertyOptional`
     - _Requirements: 1.2, 1.3, 1.4, 1.5_
 
-  - [ ] 2.2 Update `AdminCategoryService` to persist and filter by `type`
+  - [x] 2.2 Update `AdminCategoryService` to persist and filter by `type`
     - `findAll`: add `type?: string` and `status?: string` params; extend the Prisma `where` clause to filter by both; include `type` in the mapped response objects
     - `create`: pass `type: dto.type` into `prisma.category.create`
     - `update`: spread `...(dto.type !== undefined && { type: dto.type as never })` into `prisma.category.update`
     - `findOne`: include `type` in the returned category object
     - _Requirements: 1.1, 1.2, 1.4_
 
-  - [ ] 2.3 Update `AdminCategoryController.findAll` to accept `type` and `status` query params
+  - [x] 2.3 Update `AdminCategoryController.findAll` to accept `type` and `status` query params
     - Add `@Query('type') type?: string` and `@Query('status') status?: string` parameters
     - Add `@ApiQuery` decorators for both new params
     - Forward both to `adminCategoryService.findAll`
@@ -59,17 +59,17 @@ Implement the Categories management section across three layers: API (NestJS/Pri
     - Assert: `validate(dto)` from `class-validator` returns errors on the `type` field
     - File: `apps/api/src/admin/category/__tests__/invalid-type-rejection.property.spec.ts`
 
-- [ ] 3. Checkpoint — API layer complete
+- [x] 3. Checkpoint — API layer complete
   - Ensure all API unit and property tests pass, ask the user if questions arise.
 
-- [ ] 4. Expand `apps/admin/src/lib/api/categories.ts` with `adminCategoriesApi`
-  - [ ] 4.1 Add all TypeScript types and interfaces
+- [x] 4. Expand `apps/admin/src/lib/api/categories.ts` with `adminCategoriesApi`
+  - [x] 4.1 Add all TypeScript types and interfaces
     - Export `CategoryType`, `CategoryStatus`, `TranslationStatus` union types
     - Export `AdminCategoryTranslation`, `AdminCategory`, `AdminCategoryListParams`, `CreateCategoryPayload`, `UpdateCategoryPayload`, `UpsertTranslationPayload` interfaces matching the API contract in the design
     - Preserve the existing `CategoryNode` interface and `categoriesApi` export unchanged
     - _Requirements: 2.7_
 
-  - [ ] 4.2 Implement the `adminCategoriesApi` object
+  - [x] 4.2 Implement the `adminCategoriesApi` object
     - `listCategories(params?)` → `apiGetWithMeta<AdminCategory[]>('/api/v1/admin/categories', params)`
     - `getCategory(id)` → `apiGet<AdminCategory>('/api/v1/admin/categories/:id')`
     - `createCategory(dto)` → `apiPost<AdminCategory>('/api/v1/admin/categories', dto)`
@@ -100,7 +100,7 @@ Implement the Categories management section across three layers: API (NestJS/Pri
     - Assert: after upsert, the category's translations array contains the locale with matching `name`/`slug`
     - File: `apps/admin/src/__tests__/api/categories-translation-roundtrip.property.spec.ts`
 
-- [ ] 5. Add Categories nav item to the sidebar
+- [x] 5. Add Categories nav item to the sidebar
   - In `apps/admin/src/components/layout/sidebar.tsx`:
     - Import `Tag` from `lucide-react` alongside existing icon imports
     - Add `{ label: 'Categories', href: '/categories', icon: Tag }` to the CONTENT section after the Articles item
@@ -115,25 +115,25 @@ Implement the Categories management section across three layers: API (NestJS/Pri
     - Use React Testing Library + fast-check; mock `usePathname`
     - File: `apps/admin/src/__tests__/components/sidebar-active-state.property.spec.tsx`
 
-- [ ] 6. Create shared category badge components
-  - [ ] 6.1 Create `apps/admin/src/components/categories/category-type-badge.tsx`
+- [x] 6. Create shared category badge components
+  - [x] 6.1 Create `apps/admin/src/components/categories/category-type-badge.tsx`
     - Coloured `Badge` variant per type: `entry` → blue, `abbreviation` → amber, `article` → green
     - Props: `type: CategoryType`
     - _Requirements: 4.2_
 
-  - [ ] 6.2 Create `apps/admin/src/components/categories/category-status-badge.tsx`
+  - [x] 6.2 Create `apps/admin/src/components/categories/category-status-badge.tsx`
     - Coloured `Badge` variant per status: `draft` → slate outline, `published` → green
     - Props: `status: CategoryStatus`
     - _Requirements: 4.2_
 
-- [ ] 7. Create `CategoryForm` component
-  - [ ] 7.1 Implement `apps/admin/src/components/categories/category-form.tsx`
+- [x] 7. Create `CategoryForm` component
+  - [x] 7.1 Implement `apps/admin/src/components/categories/category-form.tsx`
     - Fields: Name (required text), Slug (required text), Type (required select: Entry/Abbreviation/Article), Icon (optional text), Sort Order (optional number, default 0), Cover Image URL (optional text), Status (select: Draft/Published, default Draft)
     - Export `CategoryFormValues` type
     - Submit button disabled when Name is empty or Type has no selection
     - _Requirements: 6.1, 6.4_
 
-  - [ ] 7.2 Add slug auto-generation logic to `CategoryForm`
+  - [x] 7.2 Add slug auto-generation logic to `CategoryForm`
     - Track `slugManuallyEdited` boolean state (false initially)
     - On Name change: if `!slugManuallyEdited`, set slug to `toSlug(name)` using a pure `toSlug` helper (lowercase, trim, remove non-alphanumeric except spaces, replace whitespace runs with `-`)
     - On Slug field direct edit: set `slugManuallyEdited = true`; stop auto-populating
@@ -155,15 +155,15 @@ Implement the Categories management section across three layers: API (NestJS/Pri
     - Use React Testing Library + fast-check
     - File: `apps/admin/src/__tests__/components/category-form-submit-disabled.property.spec.tsx`
 
-- [ ] 8. Create `TranslationDialog` component
+- [x] 8. Create `TranslationDialog` component
   - Create `apps/admin/src/components/categories/translation-dialog.tsx`
   - Props: `open`, `onOpenChange`, `locale`, `initialValues?` (pre-populated for edit), `onSubmit(payload: UpsertTranslationPayload)`, `isSubmitting`
   - Fields: Name (text), Slug (text), Translator Note (optional text), Status (select: draft/reviewed/published)
   - On submit: call `onSubmit`; keep dialog open on error (caller handles toast)
   - _Requirements: 7.5, 7.6, 7.7, 7.8_
 
-- [ ] 9. Create the Category List page
-  - [ ] 9.1 Create `apps/admin/src/app/(dashboard)/categories/page.tsx` with table and filters
+- [x] 9. Create the Category List page
+  - [x] 9.1 Create `apps/admin/src/app/(dashboard)/categories/page.tsx` with table and filters
     - Page header: "Categories" title, "+ Add Category" button (→ `/categories/new`), Export button, Import button
     - Filter bar: Search input (300 ms debounce, resets page to 1), Type select (All/Entry/Abbreviation/Article), Status select (All/Draft/Published)
     - Table columns: Name (with icon if non-null), Type (`CategoryTypeBadge`), Entry Count, Status (`CategoryStatusBadge`), Updated date, Actions menu
@@ -175,13 +175,13 @@ Implement the Categories management section across three layers: API (NestJS/Pri
     - Use `useQuery(['categories', params])` for the filtered list
     - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8, 4.9, 4.10, 4.11, 4.12, 4.15, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7_
 
-  - [ ] 9.2 Add summary panel to the Category List page
+  - [x] 9.2 Add summary panel to the Category List page
     - Four stat cards: Entry count, Abbreviation count, Article count, Total
     - Separate `useQuery(['categories-summary'])` call with `limit=1000` to derive counts via a `computeSummary` helper
     - Skeleton placeholders while loading; dashes + toast error on failure
     - _Requirements: 8.1, 8.2, 8.3, 8.4_
 
-  - [ ] 9.3 Add Export and Import functionality to the Category List page
+  - [x] 9.3 Add Export and Import functionality to the Category List page
     - Export: fetch all categories matching current filters, build CSV string, trigger `<a download="categories.csv">` click
     - Import: hidden `<input type="file" accept=".csv">` triggered by Import button; validate file size ≤ 5 MB and `.csv` extension before sending; toast error and abort if invalid
     - _Requirements: 4.13, 4.14_
@@ -202,10 +202,10 @@ Implement the Categories management section across three layers: API (NestJS/Pri
     - Summary panel shows dashes when summary fetch fails
     - File: `apps/admin/src/__tests__/pages/categories-list.spec.tsx`
 
-- [ ] 10. Checkpoint — List page complete
+- [x] 10. Checkpoint — List page complete
   - Ensure all list page tests pass, ask the user if questions arise.
 
-- [ ] 11. Create the Category Create page
+- [x] 11. Create the Category Create page
   - Create `apps/admin/src/app/(dashboard)/categories/new/page.tsx`
   - Back link → `/categories`; page title "New Category"
   - Render `CategoryForm` with `submitLabel="Create Category"`
@@ -219,8 +219,8 @@ Implement the Categories management section across three layers: API (NestJS/Pri
     - 409 on submit shows inline slug error; form stays open
     - File: `apps/admin/src/__tests__/pages/categories-create.spec.tsx`
 
-- [ ] 12. Create the Category Edit page
-  - [ ] 12.1 Create `apps/admin/src/app/(dashboard)/categories/[id]/page.tsx` with form pre-population
+- [x] 12. Create the Category Edit page
+  - [x] 12.1 Create `apps/admin/src/app/(dashboard)/categories/[id]/page.tsx` with form pre-population
     - `useQuery(['category', id])` → `adminCategoriesApi.getCategory(id)`
     - Skeleton placeholders while loading
     - 404 response → "Category not found" message with back link to `/categories`
@@ -229,7 +229,7 @@ Implement the Categories management section across three layers: API (NestJS/Pri
     - Delete button → `ConfirmDialog` → `adminCategoriesApi.deleteCategory`; on 2xx navigate to `/categories`; on 400 show specific toast
     - _Requirements: 7.1, 7.2, 7.3, 7.9, 7.10, 7.11, 7.12, 7.13_
 
-  - [ ] 12.2 Add Translations section to the Edit page
+  - [x] 12.2 Add Translations section to the Edit page
     - List all existing translations (locale, name, slug, status) with Edit button per row
     - "Add Translation" buttons for each locale not yet present (en, pl, de, no, fr)
     - Edit click: open `TranslationDialog` pre-populated with current values
@@ -260,7 +260,7 @@ Implement the Categories management section across three layers: API (NestJS/Pri
     - 400 on delete shows specific toast
     - File: `apps/admin/src/__tests__/pages/categories-edit.spec.tsx`
 
-- [ ] 13. Final checkpoint — Ensure all tests pass
+- [x] 13. Final checkpoint — Ensure all tests pass
   - Ensure all tests pass across API and frontend layers, ask the user if questions arise.
 
 ---

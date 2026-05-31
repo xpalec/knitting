@@ -8,6 +8,7 @@ import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Inject } from '@nestjs/common';
 import type { Cache } from 'cache-manager';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CategoryType } from '../../generated/prisma';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { UpsertCategoryTranslationDto } from './dto/upsert-category-translation.dto';
@@ -26,20 +27,24 @@ export class AdminCategoryService {
   // Category CRUD
   // ---------------------------------------------------------------------------
 
-  async findAll(page: number, limit: number, search?: string) {
+  async findAll(page: number, limit: number, search?: string, type?: string, status?: string) {
     const skip = (page - 1) * limit;
 
     // Search against English translation name when a query is provided
-    const where = search
-      ? {
-          translations: {
-            some: {
-              locale: 'en',
-              name: { contains: search, mode: 'insensitive' as const },
+    const where = {
+      ...(search
+        ? {
+            translations: {
+              some: {
+                locale: 'en',
+                name: { contains: search, mode: 'insensitive' as const },
+              },
             },
-          },
-        }
-      : {};
+          }
+        : {}),
+      ...(type !== undefined && { type: type as CategoryType }),
+      ...(status !== undefined && { status: status as never }),
+    };
 
     const [categories, total] = await Promise.all([
       this.prisma.category.findMany({
@@ -61,6 +66,7 @@ export class AdminCategoryService {
     return {
       data: categories.map((c) => ({
         id: c.id,
+        type: c.type,
         parent_id: c.parent_id,
         icon: c.icon,
         sort_order: c.sort_order,
@@ -115,6 +121,7 @@ export class AdminCategoryService {
 
     const category = await this.prisma.category.create({
       data: {
+        type: dto.type as CategoryType,
         parent_id: dto.parent_id ?? null,
         icon: dto.icon ?? null,
         sort_order: dto.sort_order ?? 0,
@@ -152,6 +159,7 @@ export class AdminCategoryService {
     const category = await this.prisma.category.update({
       where: { id },
       data: {
+        ...(dto.type !== undefined && { type: dto.type as CategoryType }),
         ...(dto.parent_id !== undefined && { parent_id: dto.parent_id }),
         ...(dto.icon !== undefined && { icon: dto.icon }),
         ...(dto.sort_order !== undefined && { sort_order: dto.sort_order }),

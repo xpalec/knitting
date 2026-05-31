@@ -35,15 +35,21 @@ export class AdminCategoryController {
   @ApiQuery({ name: 'page', required: false, example: 1 })
   @ApiQuery({ name: 'limit', required: false, example: 50 })
   @ApiQuery({ name: 'search', required: false, description: 'Filter by English name' })
+  @ApiQuery({ name: 'type', required: false, description: 'Filter by category type', enum: ['entry', 'abbreviation', 'article'] })
+  @ApiQuery({ name: 'status', required: false, description: 'Filter by category status', enum: ['draft', 'published'] })
   findAll(
     @Query('page') page = '1',
     @Query('limit') limit = '50',
     @Query('search') search?: string,
+    @Query('type') type?: string,
+    @Query('status') status?: string,
   ) {
     return this.adminCategoryService.findAll(
       parseInt(page, 10),
       parseInt(limit, 10),
       search,
+      type,
+      status,
     );
   }
 

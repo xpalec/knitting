@@ -13,6 +13,7 @@ import {
   Users,
   ChevronLeft,
   ChevronRight,
+  Tag,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth';
@@ -38,6 +39,7 @@ const NAV_SECTIONS: Array<{ label: string; items: NavItem[] }> = [
       { label: 'Entries', href: '/entries', icon: BookOpen },
       { label: 'Queue', href: '/queue', icon: InboxIcon },
       { label: 'Articles', href: '/articles', icon: FileText },
+      { label: 'Categories', href: '/categories', icon: Tag },
     ],
   },
   {

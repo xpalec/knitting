@@ -62,6 +62,7 @@ describe('AdminCategoryService', () => {
       mockPrisma.categoryTranslation.findUnique.mockResolvedValue(null);
       mockPrisma.category.create.mockResolvedValue({
         id: 'cat-1',
+        type: 'entry',
         parent_id: null,
         icon: null,
         sort_order: 0,
@@ -71,22 +72,46 @@ describe('AdminCategoryService', () => {
         translations: [{ locale: 'en', name: 'Stitches', slug: 'stitches', status: 'draft' }],
       });
 
-      const result = await service.create({ name_en: 'Stitches', slug_en: 'stitches' });
+      const result = await service.create({ type: 'entry', name_en: 'Stitches', slug_en: 'stitches' });
 
       expect(result.data.translations[0].name).toBe('Stitches');
       expect(mockPrisma.category.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ parent_id: null }),
+          data: expect.objectContaining({ parent_id: null, type: 'entry' }),
         }),
       );
       expect(mockCache.del).toHaveBeenCalled();
+    });
+
+    it('persists the type field when creating a category', async () => {
+      mockPrisma.categoryTranslation.findUnique.mockResolvedValue(null);
+      mockPrisma.category.create.mockResolvedValue({
+        id: 'cat-2',
+        type: 'abbreviation',
+        parent_id: null,
+        icon: null,
+        sort_order: 0,
+        status: 'draft',
+        entry_count: 0,
+        cover_image_url: null,
+        translations: [{ locale: 'en', name: 'Abbrevs', slug: 'abbrevs', status: 'draft' }],
+      });
+
+      const result = await service.create({ type: 'abbreviation', name_en: 'Abbrevs', slug_en: 'abbrevs' });
+
+      expect(result.data.type).toBe('abbreviation');
+      expect(mockPrisma.category.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ type: 'abbreviation' }),
+        }),
+      );
     });
 
     it('throws ConflictException when English slug already exists', async () => {
       mockPrisma.categoryTranslation.findUnique.mockResolvedValue({ id: 'existing' });
 
       await expect(
-        service.create({ name_en: 'Stitches', slug_en: 'stitches' }),
+        service.create({ type: 'entry', name_en: 'Stitches', slug_en: 'stitches' }),
       ).rejects.toThrow(ConflictException);
     });
 
@@ -95,7 +120,7 @@ describe('AdminCategoryService', () => {
       mockPrisma.category.findUnique.mockResolvedValue(null); // parent not found
 
       await expect(
-        service.create({ name_en: 'Lace', slug_en: 'lace', parent_id: 'bad-uuid' }),
+        service.create({ type: 'entry', name_en: 'Lace', slug_en: 'lace', parent_id: 'bad-uuid' }),
       ).rejects.toThrow(NotFoundException);
     });
   });
@@ -108,13 +133,41 @@ describe('AdminCategoryService', () => {
     it('updates status and sort_order', async () => {
       mockPrisma.category.findUnique.mockResolvedValue({ id: 'cat-1' });
       mockPrisma.category.update.mockResolvedValue({
-        id: 'cat-1', status: 'published', sort_order: 2,
+        id: 'cat-1', type: 'entry', status: 'published', sort_order: 2,
       });
 
       const result = await service.update('cat-1', { status: 'published', sort_order: 2 });
 
       expect(result.data.status).toBe('published');
       expect(mockCache.del).toHaveBeenCalled();
+    });
+
+    it('updates the type field', async () => {
+      mockPrisma.category.findUnique.mockResolvedValue({ id: 'cat-1' });
+      mockPrisma.category.update.mockResolvedValue({
+        id: 'cat-1', type: 'article', status: 'draft', sort_order: 0,
+      });
+
+      const result = await service.update('cat-1', { type: 'article' });
+
+      expect(result.data.type).toBe('article');
+      expect(mockPrisma.category.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ type: 'article' }),
+        }),
+      );
+    });
+
+    it('does not include type in update data when type is undefined', async () => {
+      mockPrisma.category.findUnique.mockResolvedValue({ id: 'cat-1' });
+      mockPrisma.category.update.mockResolvedValue({
+        id: 'cat-1', type: 'entry', status: 'published', sort_order: 0,
+      });
+
+      await service.update('cat-1', { status: 'published' });
+
+      const updateCall = mockPrisma.category.update.mock.calls[0][0];
+      expect(updateCall.data).not.toHaveProperty('type');
     });
 
     it('throws BadRequestException when category is set as its own parent', async () => {
@@ -131,6 +184,91 @@ describe('AdminCategoryService', () => {
       await expect(service.update('bad-id', { status: 'published' })).rejects.toThrow(
         NotFoundException,
       );
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // findAll
+  // ---------------------------------------------------------------------------
+
+  describe('findAll', () => {
+    const mockCategories = [
+      {
+        id: 'cat-1',
+        type: 'entry',
+        parent_id: null,
+        icon: null,
+        sort_order: 0,
+        status: 'published',
+        entry_count: 5,
+        cover_image_url: null,
+        translations: [{ locale: 'en', name: 'Stitches', slug: 'stitches', status: 'published' }],
+        _count: { children: 2 },
+      },
+      {
+        id: 'cat-2',
+        type: 'abbreviation',
+        parent_id: null,
+        icon: null,
+        sort_order: 1,
+        status: 'draft',
+        entry_count: 0,
+        cover_image_url: null,
+        translations: [{ locale: 'en', name: 'Abbrevs', slug: 'abbrevs', status: 'draft' }],
+        _count: { children: 0 },
+      },
+    ];
+
+    it('includes type in each mapped response object', async () => {
+      mockPrisma.category.findMany.mockResolvedValue(mockCategories);
+      mockPrisma.category.count.mockResolvedValue(2);
+
+      const result = await service.findAll(1, 50);
+
+      expect(result.data[0].type).toBe('entry');
+      expect(result.data[1].type).toBe('abbreviation');
+    });
+
+    it('filters by type when type param is provided', async () => {
+      mockPrisma.category.findMany.mockResolvedValue([mockCategories[0]]);
+      mockPrisma.category.count.mockResolvedValue(1);
+
+      await service.findAll(1, 50, undefined, 'entry');
+
+      expect(mockPrisma.category.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ type: 'entry' }),
+        }),
+      );
+      expect(mockPrisma.category.count).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ type: 'entry' }),
+        }),
+      );
+    });
+
+    it('filters by status when status param is provided', async () => {
+      mockPrisma.category.findMany.mockResolvedValue([mockCategories[0]]);
+      mockPrisma.category.count.mockResolvedValue(1);
+
+      await service.findAll(1, 50, undefined, undefined, 'published');
+
+      expect(mockPrisma.category.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ status: 'published' }),
+        }),
+      );
+    });
+
+    it('does not include type or status in where clause when not provided', async () => {
+      mockPrisma.category.findMany.mockResolvedValue([]);
+      mockPrisma.category.count.mockResolvedValue(0);
+
+      await service.findAll(1, 50);
+
+      const findManyCall = mockPrisma.category.findMany.mock.calls[0][0];
+      expect(findManyCall.where).not.toHaveProperty('type');
+      expect(findManyCall.where).not.toHaveProperty('status');
     });
   });
 
