@@ -410,7 +410,7 @@ src/
 │   ├── entry-detail/       ← CTI detail tables (technique, stitch, tool, etc.)
 │   ├── translation/        ← locale-specific terms and definitions
 │   ├── category/           ← hierarchical taxonomy
-│   ├── tag/
+│   ├── tag/                ← tag CRUD + TagTranslation management
 │   ├── media/              ← media asset management + R2 upload
 │   ├── article/            ← long-form editorial content
 │   ├── search/             ← full-text search across entries + translations
@@ -440,11 +440,12 @@ src/
 
 ```
 # Public (no auth)
-GET    /api/v1/entries                    paginated list, locale-aware
+GET    /api/v1/entries                    paginated list, locale-aware; query params: locale, page, limit, category, tag, skillLevel, sort
 GET    /api/v1/entries/:slug              entry detail with translations
 GET    /api/v1/entries/search?q=&locale=  full-text search
 GET    /api/v1/categories                 category tree (locale param required; resolves names via CategoryTranslation)
 GET    /api/v1/categories/:slug/entries   entries in category (slug is locale-specific; resolved via CategoryTranslation)
+GET    /api/v1/tags                       list all tags with translated name, description, and SEO fields for locale
 GET    /api/v1/articles                   article list
 GET    /api/v1/articles/:slug             article detail
 GET    /api/v1/countries/:code            country landing data
@@ -462,7 +463,13 @@ PATCH  /api/v1/admin/queue/translations/:id
 POST   /api/v1/admin/entries              create entry
 PUT    /api/v1/admin/entries/:id          update entry
 DELETE /api/v1/admin/entries/:id          soft delete (sets status=deprecated)
+POST   /api/v1/admin/entries/:id/tags     assign tags to entry (replaces current set)
 POST   /api/v1/admin/media/upload         upload to R2, return asset URL
+GET    /api/v1/admin/tags                 list all tags (admin view, all locales)
+POST   /api/v1/admin/tags                 create tag
+PUT    /api/v1/admin/tags/:slug           update tag (type, color_hex)
+DELETE /api/v1/admin/tags/:slug           delete tag (only if no entries assigned)
+PUT    /api/v1/admin/tags/:slug/translations/:locale  upsert TagTranslation (name, description, seo_title, seo_description)
 GET    /api/v1/admin/users                user list
 POST   /api/v1/auth/login                 issue JWT
 POST   /api/v1/auth/refresh               refresh JWT

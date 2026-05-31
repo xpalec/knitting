@@ -51,6 +51,9 @@ describe('EntryService', () => {
           metadata: { skill_level: 'beginner' },
           translations: [{ term: 'Knit stitch', slug: 'knit-stitch', metadata: { abbreviation: 'K' }, status: 'published' }],
           categories: [],
+          tags: [
+            { tag: { slug: 'wool', type: 'fiber_type', color_hex: '#8B4513', translations: [{ name: 'Wool' }] } },
+          ],
         },
       ]);
       mockPrisma.entry.count.mockResolvedValue(1);
@@ -60,7 +63,31 @@ describe('EntryService', () => {
       expect(result.data).toHaveLength(1);
       expect(result.data[0]?.term).toBe('Knit stitch');
       expect(result.data[0]?.abbreviation).toBe('K');
+      expect(result.data[0]?.tags).toHaveLength(1);
+      expect(result.data[0]?.tags[0]?.name).toBe('Wool');
+      expect(result.data[0]?.tags[0]?.slug).toBe('wool');
       expect(result.meta.total).toBe(1);
+    });
+
+    it('falls back to tag slug when no translation exists for locale', async () => {
+      mockPrisma.entry.findMany.mockResolvedValue([
+        {
+          origin_language: 'en',
+          status: 'published',
+          metadata: {},
+          translations: [{ term: 'Knit stitch', slug: 'knit-stitch', metadata: {}, status: 'published' }],
+          categories: [],
+          tags: [
+            { tag: { slug: 'fair-isle', type: 'style_tradition', color_hex: '#228B22', translations: [] } },
+          ],
+        },
+      ]);
+      mockPrisma.entry.count.mockResolvedValue(1);
+
+      const result = await service.findAll({ locale: 'de' });
+
+      // No German translation — falls back to slug
+      expect(result.data[0]?.tags[0]?.name).toBe('fair-isle');
     });
 
     it('flags entries missing the requested locale translation', async () => {
@@ -71,6 +98,7 @@ describe('EntryService', () => {
           metadata: {},
           translations: [],
           categories: [],
+          tags: [],
         },
       ]);
       mockPrisma.entry.count.mockResolvedValue(1);
@@ -89,6 +117,7 @@ describe('EntryService', () => {
           metadata: {},
           translations: [{ term: 'Zebra stitch', slug: 'zebra', metadata: {}, status: 'published' }],
           categories: [],
+          tags: [],
         },
         {
           origin_language: 'en',
@@ -96,6 +125,7 @@ describe('EntryService', () => {
           metadata: {},
           translations: [{ term: 'Alpaca stitch', slug: 'alpaca', metadata: {}, status: 'published' }],
           categories: [],
+          tags: [],
         },
       ]);
       mockPrisma.entry.count.mockResolvedValue(2);
@@ -147,6 +177,9 @@ describe('EntryService', () => {
           media_assets: [],
           pattern_usage: [],
           categories: [],
+          tags: [
+            { tag: { slug: 'lace', type: 'style_tradition', color_hex: '#DDA0DD', translations: [{ name: 'Lace' }] } },
+          ],
           related_from: [],
         },
       });
@@ -156,6 +189,8 @@ describe('EntryService', () => {
       expect(result.data).not.toHaveProperty('id');
       expect(result.data['term']).toBe('Knit stitch');
       expect(result.data['definition_short']).toBe('Basic knit stitch');
+      expect(result.data['tags']).toHaveLength(1);
+      expect((result.data['tags'] as Array<Record<string, unknown>>)[0]?.name).toBe('Lace');
     });
   });
 });

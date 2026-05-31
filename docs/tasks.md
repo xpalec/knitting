@@ -135,9 +135,9 @@ Status legend: `[ ]` not started · `[x]` done · `[-]` in progress · `[~]` def
 
 ### `EntryModule`
 - [x] `GET /api/v1/entries` — paginated, locale-aware alphabetical list
-  - [x] Query params: `locale`, `page`, `limit`, `category`, `skillLevel`, `sort`
+  - [x] Query params: `locale`, `page`, `limit`, `category`, `tag`, `skillLevel`, `sort`
   - [x] Locale-aware collation via ICU or `pg_collation`
-  - [x] Each row resolves term and abbreviation from `Translation.term` and `Translation.metadata.abbreviation` for the requested locale
+  - [x] Each row resolves term and abbreviation from `Translation.term` and `Translation.metadata.abbreviation` for the requested locale; includes translated category and tag names via `CategoryTranslation` and `TagTranslation`
   - [x] Entries missing the requested locale Translation fall back to `en` Translation and are flagged `missing_translation: true`
 - [x] `GET /api/v1/entries/:locale/:slug` — full entry detail resolved via `(locale, slug)` on `Translation`
   - [x] Returns assembled response: `Entry` fields + active `Translation` (term, slug, metadata, blocks) + `content_blocks` layout
@@ -304,7 +304,7 @@ Status legend: `[ ]` not started · `[x]` done · `[-]` in progress · `[~]` def
   - [ ] SSR; fetches from `/api/v1/entries?locale=&page=&...`
   - [ ] Paginated list (20 per page), locale-aware alphabetical sort
   - [ ] Alphabetical dividers by first letter in active locale
-  - [ ] Each row: term (from `Translation.term`), abbreviation (from `Translation.metadata.abbreviation`), definition preview (from `Translation.metadata.definition_short`), skill badge, category badge
+  - [ ] Each row: term (from `Translation.term`), abbreviation (from `Translation.metadata.abbreviation`), definition preview (from `Translation.metadata.definition_short`), skill badge, category badge, tag badges
   - [ ] Entries without active-locale Translation shown in muted style with "no [language] translation" label
   - [ ] Filter bar: free-text search, skill level, category
   - [ ] Sort toggle: A→Z / by skill level

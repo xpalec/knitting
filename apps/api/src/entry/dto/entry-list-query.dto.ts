@@ -28,6 +28,11 @@ export class EntryListQueryDto {
   @IsString()
   category?: string;
 
+  @ApiPropertyOptional({ example: 'wool', description: 'Filter by tag slug (canonical English identifier)' })
+  @IsOptional()
+  @IsString()
+  tag?: string;
+
   @ApiPropertyOptional({
     enum: ['beginner', 'intermediate', 'advanced', 'expert'],
   })

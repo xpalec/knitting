@@ -66,9 +66,9 @@ The core reference section of the encyclopedia. A paginated, searchable, filtera
 - `[LAUNCH]` Paginated list of entries, default 20 per page
 - `[LAUNCH]` Sorted alphabetically in the active locale's language (locale-aware collation — handles ą, ę, ó, ś, ź etc. correctly for Polish; ä, ö, ü for German, etc.)
 - `[LAUNCH]` Alphabetical dividers grouping entries by first letter in the active locale
-- `[LAUNCH]` Each row shows: term, abbreviation, definition preview (truncated), skill level badge, and category badge
+- `[LAUNCH]` Each row shows: term, abbreviation, definition preview (truncated), skill level badge, category badge, and tag badges
 - `[LAUNCH]` Entries missing a translation in the active locale show the English canonical term in muted style with a "no [language] translation yet" label
-- `[LAUNCH]` Filter bar: free-text search within the current locale, skill level filter, category filter
+- `[LAUNCH]` Filter bar: free-text search within the current locale, skill level filter, category filter, tag filter
 - `[LAUNCH]` Sort toggle: alphabetical (A → Z) or by skill level
 - `[SOON]` Filter by country / tradition of origin
 - `[SOON]` Filter by media availability (entries with video, entries with diagram)
@@ -80,6 +80,12 @@ The core reference section of the encyclopedia. A paginated, searchable, filtera
 - `[LAUNCH]` Each category page shows its subcategories and the entrys within them
 - `[LAUNCH]` Breadcrumb navigation showing position in the category hierarchy
 - `[SOON]` Category page includes an editorial introduction (e.g. "About lace knitting")
+
+### Tag browsing
+- `[LAUNCH]` Tag index page listing all published tags with translated names and entry counts
+- `[LAUNCH]` Each tag page shows all entries tagged with it, paginated and locale-aware
+- `[LAUNCH]` Tag page includes translated name, description (rich text), and correct SEO title/description per locale
+- `[LAUNCH]` Tag badges on entry list rows and entry detail pages link to the tag page
 
 ---
 

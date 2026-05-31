@@ -234,19 +234,26 @@ model Tag {
 
 // ---------------------------------------------------------------------------
 // TagTranslation
-// Locale-specific display name for a tag. One row per locale per tag.
+// Locale-specific content for a tag: name, description, SEO fields.
+// One row per locale per tag.
 // ---------------------------------------------------------------------------
 
 model TagTranslation {
-  id         String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tag_id     String            @db.Uuid
+  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tag_id          String            @db.Uuid
   /// BCP-47 locale code: en, pl, de, no, fr
-  locale     String
+  locale          String
   /// Display name in this locale, e.g. "wełna" (pl), "wool" (en)
-  name       String
-  status     TranslationStatus @default(draft)
-  created_at DateTime          @default(now()) @db.Timestamptz
-  updated_at DateTime          @updatedAt @db.Timestamptz
+  name            String
+  /// TipTap JSON — editorial description shown on the public tag page. Nullable.
+  description     Json?
+  /// Locale-specific <title> override for the tag page (≤60 chars). Falls back to name.
+  seo_title       String?
+  /// Locale-specific meta description for the tag page (≤160 chars).
+  seo_description String?
+  status          TranslationStatus @default(draft)
+  created_at      DateTime          @default(now()) @db.Timestamptz
+  updated_at      DateTime          @updatedAt @db.Timestamptz
 
   tag Tag @relation(fields: [tag_id], references: [id], onDelete: Cascade)
 

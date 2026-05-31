@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { defineConfig } from "prisma/config";
 
+// DATABASE_URL must be set in .env without quotes (bare value, not "quoted")
 export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {

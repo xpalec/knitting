@@ -20,6 +20,7 @@ export class EntryService {
       page = 1,
       limit = 20,
       category,
+      tag,
       skillLevel,
       sort = 'alpha',
     } = query;
@@ -37,10 +38,13 @@ export class EntryService {
         },
       };
     }
+    if (tag) {
+      // tag filter uses canonical slug (locale-independent)
+      where['tags'] = { some: { tag: { slug: tag } } };
+    }
     if (skillLevel) {
       where['metadata'] = { path: ['skill_level'], equals: skillLevel };
     }
-
     const [entries, total] = await Promise.all([
       this.prisma.entry.findMany({
         where,
@@ -61,6 +65,18 @@ export class EntryService {
                   translations: {
                     where: { locale, status: 'published' },
                     select: { name: true, slug: true, locale: true },
+                  },
+                },
+              },
+            },
+          },
+          tags: {
+            include: {
+              tag: {
+                include: {
+                  translations: {
+                    where: { locale, status: 'published' },
+                    select: { name: true },
                   },
                 },
               },
@@ -94,6 +110,12 @@ export class EntryService {
             slug: ct?.slug ?? null,
           };
         }),
+        tags: e.tags.map((et) => ({
+          slug: et.tag.slug,
+          name: et.tag.translations[0]?.name ?? et.tag.slug,
+          type: et.tag.type,
+          color_hex: et.tag.color_hex,
+        })),
       };
     });
 
@@ -136,6 +158,18 @@ export class EntryService {
                     translations: {
                       where: { locale, status: 'published' },
                       select: { name: true, slug: true, locale: true },
+                    },
+                  },
+                },
+              },
+            },
+            tags: {
+              include: {
+                tag: {
+                  include: {
+                    translations: {
+                      where: { locale, status: 'published' },
+                      select: { name: true },
                     },
                   },
                 },
@@ -188,6 +222,12 @@ export class EntryService {
             slug: ct?.slug ?? null,
           };
         }),
+        tags: entry.tags.map((et) => ({
+          slug: et.tag.slug,
+          name: et.tag.translations[0]?.name ?? et.tag.slug,
+          type: et.tag.type,
+          color_hex: et.tag.color_hex,
+        })),
         translations: entry.translations.map((t) => ({
           locale: t.locale,
           slug: t.slug,

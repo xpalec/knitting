@@ -19,6 +19,7 @@ import { RolesGuard } from './auth/guards/roles.guard';
 // Public modules
 import { CategoryModule } from './category/category.module';
 import { EntryModule } from './entry/entry.module';
+import { TagModule } from './tag/tag.module';
 import { SearchModule } from './search/search.module';
 import { ArticleModule } from './article/article.module';
 import { CountryModule } from './country/country.module';
@@ -28,6 +29,7 @@ import { ContributionModule } from './contribution/contribution.module';
 // Admin modules
 import { AdminQueueModule } from './admin/queue/admin-queue.module';
 import { AdminEntryModule } from './admin/entry/admin-entry.module';
+import { AdminTagModule } from './admin/tag/admin-tag.module';
 import { AdminBlockTemplateModule } from './admin/block-template/admin-block-template.module';
 import { AdminStatsModule } from './admin/stats/admin-stats.module';
 import { UserModule } from './user/user.module';
@@ -60,6 +62,7 @@ const REDIS_URL = process.env.REDIS_URL ?? 'redis://localhost:6379';
     // Public
     CategoryModule,
     EntryModule,
+    TagModule,
     SearchModule,
     ArticleModule,
     CountryModule,
@@ -69,6 +72,7 @@ const REDIS_URL = process.env.REDIS_URL ?? 'redis://localhost:6379';
     // Admin
     AdminQueueModule,
     AdminEntryModule,
+    AdminTagModule,
     AdminBlockTemplateModule,
     AdminStatsModule,
     UserModule,

@@ -1,9 +1,18 @@
 # Knitting Encyclopedia — Database Model
 
-*Document version: 2.4 — May 2026*
-*Supersedes: 03-data-model.md v2.3 (May 2026)*
+*Document version: 2.5 — May 2026*
+*Supersedes: 03-data-model.md v2.4 (May 2026)*
 
 ---
+
+## What changed in v2.5
+
+- `TagTranslation.description` added — TipTap JSON rich-text description per locale; same node schema as `CategoryTranslation.description`; nullable
+- `TagTranslation.seo_title` added — locale-specific SEO `<title>` override (≤60 chars); nullable; falls back to `name` if absent
+- `TagTranslation.seo_description` added — locale-specific meta description (≤160 chars); nullable
+- `Tag` gains full CRUD API endpoints: public list + admin create/update/delete
+- `TagTranslation` gains upsert endpoint per locale
+- `EntryTag` assignment endpoints added to admin entry management
 
 ## What changed in v2.4
 
@@ -376,13 +385,14 @@ Many-to-many with `Entry` via `EntryTag(entry_id, tag_id)`.
 
 - `Tag.slug` is the canonical internal identifier (replaces the old `name` unique constraint). It is always English kebab-case and never changes.
 - Display names per locale live in `TagTranslation.name`. The `en` row's `name` is the canonical English display name.
-- Tags are simpler than categories — no hierarchy, no description, no status lifecycle beyond the translation row's own status.
+- Tags have no hierarchy and no status lifecycle on the `Tag` table itself — `Tag.status` is not needed because a tag without any published `TagTranslation` rows is effectively invisible.
+- `description`, `seo_title`, and `seo_description` are locale-specific and live in `TagTranslation`. The `en` row's values are the canonical English fallbacks for other locales that have no translation yet.
 
 ---
 
 ### TagTranslation
 
-Locale-specific display name for a tag. One row per locale per tag.
+Locale-specific content for a tag — display name, rich-text description, and SEO fields. One row per locale per tag.
 
 | Field | Type | Constraints | Notes |
 |---|---|---|---|
@@ -390,6 +400,9 @@ Locale-specific display name for a tag. One row per locale per tag.
 | `tag_id` | uuid | FK → Tag | |
 | `locale` | string | BCP-47 | e.g. `pl`, `de`, `no`, `fr`, `en` |
 | `name` | string | | Display name in this locale, e.g. `wełna` (Polish), `wool` (English). |
+| `description` | jsonb | default `null` | TipTap JSON — editorial description of the tag shown on the public tag page. Same node schema as `CategoryTranslation.description`. Nullable. |
+| `seo_title` | string | nullable, ≤60 chars | Locale-specific `<title>` tag override for the tag page. Falls back to `name` if absent. |
+| `seo_description` | string | nullable, ≤160 chars | Locale-specific meta description for the tag page. |
 | `status` | enum | default `draft` | `draft` · `reviewed` · `published`. |
 | `created_at` | timestamptz | UTC | |
 | `updated_at` | timestamptz | UTC | |
@@ -625,7 +638,7 @@ Used by: `Category.status`
 | `CategoryTranslation.description` as TipTap JSON | Rich-text editorial introduction per locale. Same node schema as the `definition` content block — reuses existing rendering infrastructure. Nullable at launch. |
 | `Category.entry_count` as denormalised integer | Avoids expensive COUNT joins on the category index page. Maintained by trigger on `EntryCategory` insert/delete. Counts only direct associations where `Entry.status = 'published'`. |
 | `Tag.slug` as canonical internal identifier | Replaces the old `name` unique constraint. Always English kebab-case, never changes. Display names per locale live in `TagTranslation.name`. |
-| `TagTranslation` for tag display names | Tags appear in filter bars, badges, and article tag lists — all of which need locale-native labels. Consistent with `CategoryTranslation`. No description needed (tags are labels, not editorial content). |
+| `TagTranslation` for tag content | Tags appear in filter bars, badges, entry responses, and article tag lists — all of which need locale-native labels. `description`, `seo_title`, and `seo_description` are locale-specific and live here. Consistent with `CategoryTranslation`. |
 | All timestamps UTC | Format for display in the UI layer only. |
 | UUID v7 for all primary keys | Time-ordered for index locality. |
 

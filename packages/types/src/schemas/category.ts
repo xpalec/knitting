@@ -104,6 +104,12 @@ export const TagTranslationSchema = z.object({
   locale: z.string().min(2),
   /** Display name in this locale, e.g. "wełna" (pl), "wool" (en) */
   name: z.string().min(1),
+  /** TipTap JSON — editorial description shown on the public tag page. Nullable. */
+  description: z.unknown().nullable(),
+  /** SEO <title> override (≤60 chars). Falls back to name if absent. */
+  seo_title: z.string().max(60).nullable(),
+  /** Meta description for the tag page (≤160 chars). */
+  seo_description: z.string().max(160).nullable(),
   status: TranslationStatusEnum,
   created_at: z.string().datetime(),
   updated_at: z.string().datetime(),
