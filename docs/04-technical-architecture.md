@@ -59,7 +59,7 @@ knitting/                        ← GitHub repo root
 **Ports (local development):**
 - `knitting` → `http://localhost:3000`
 - `admin` → `http://localhost:3001`
-- `api` → `http://localhost:4000`
+- `api` → `http://localhost:3002`
 
 ---
 
@@ -443,8 +443,8 @@ src/
 GET    /api/v1/entries                    paginated list, locale-aware
 GET    /api/v1/entries/:slug              entry detail with translations
 GET    /api/v1/entries/search?q=&locale=  full-text search
-GET    /api/v1/categories                 category tree
-GET    /api/v1/categories/:slug/entries   entries in category
+GET    /api/v1/categories                 category tree (locale param required; resolves names via CategoryTranslation)
+GET    /api/v1/categories/:slug/entries   entries in category (slug is locale-specific; resolved via CategoryTranslation)
 GET    /api/v1/articles                   article list
 GET    /api/v1/articles/:slug             article detail
 GET    /api/v1/countries/:code            country landing data

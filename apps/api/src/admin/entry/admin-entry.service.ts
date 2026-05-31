@@ -65,7 +65,16 @@ export class AdminEntryService {
             select: { term: true, slug: true },
           },
           categories: {
-            include: { category: { select: { name: true, slug: true } } },
+            include: {
+              category: {
+                include: {
+                  translations: {
+                    where: { locale: 'en', status: 'published' },
+                    select: { slug: true },
+                  },
+                },
+              },
+            },
           },
         },
         skip,
@@ -83,7 +92,7 @@ export class AdminEntryService {
         metadata: e.metadata,
         term: e.translations[0]?.term ?? null,
         slug: e.translations[0]?.slug ?? null,
-        categories: e.categories.map((ec) => ec.category.slug),
+        categories: e.categories.map((ec) => ec.category.translations[0]?.slug ?? ec.category.id),
         created_at: e.created_at,
         updated_at: e.updated_at,
       })),

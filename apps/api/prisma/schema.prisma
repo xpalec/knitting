@@ -1,5 +1,5 @@
 // Knitting Encyclopedia — Prisma Schema
-// Data model: 03-data-model.md v2.3
+// Data model: 03-data-model.md v2.4
 // Generator: prisma-client (Prisma 7)
 
 generator client {
@@ -32,6 +32,11 @@ enum EntryStatus {
 enum TranslationStatus {
   draft
   reviewed
+  published
+}
+
+enum CategoryStatus {
+  draft
   published
 }
 
@@ -140,21 +145,61 @@ model Translation {
 // ---------------------------------------------------------------------------
 // Category
 // Hierarchical taxonomy via self-join parent_id. 2–3 levels recommended.
+// Display names, slugs, and descriptions live in CategoryTranslation.
 // ---------------------------------------------------------------------------
 
 model Category {
-  id         String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name       String
-  slug       String  @unique
-  parent_id  String? @db.Uuid
-  icon       String?
-  sort_order Int     @default(0)
+  id              String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  parent_id       String?        @db.Uuid
+  icon            String?
+  sort_order      Int            @default(0)
+  status          CategoryStatus @default(draft)
+  /// Denormalised count of published entries — maintained by application logic on EntryCategory changes
+  entry_count     Int            @default(0)
+  /// Optional CDN URL (Cloudflare R2) for richer category landing pages
+  cover_image_url String?
+  /// Open-ended language-independent properties. GIN-indexed.
+  metadata        Json           @default("{}")
+  created_at      DateTime       @default(now()) @db.Timestamptz
+  updated_at      DateTime       @updatedAt @db.Timestamptz
 
-  parent   Category?  @relation("CategoryChildren", fields: [parent_id], references: [id])
-  children Category[] @relation("CategoryChildren")
-  entries  EntryCategory[]
+  parent       Category?             @relation("CategoryChildren", fields: [parent_id], references: [id])
+  children     Category[]            @relation("CategoryChildren")
+  entries      EntryCategory[]
+  translations CategoryTranslation[]
 
+  @@index([parent_id])
   @@map("category")
+}
+
+// ---------------------------------------------------------------------------
+// CategoryTranslation
+// All locale-specific content for a category: name, slug, rich-text description.
+// One row per locale per category.
+// ---------------------------------------------------------------------------
+
+model CategoryTranslation {
+  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  category_id     String            @db.Uuid
+  /// BCP-47 locale code: en, pl, de, no, fr
+  locale          String
+  /// Locale-specific public URL slug, e.g. "sciegi" (pl), "stitches" (en)
+  slug            String
+  /// Display name in this locale
+  name            String
+  /// TipTap JSON — editorial introduction. Same node schema as the definition content block. Nullable.
+  description     Json?
+  status          TranslationStatus @default(draft)
+  translator_note String?
+  created_at      DateTime          @default(now()) @db.Timestamptz
+  updated_at      DateTime          @updatedAt @db.Timestamptz
+
+  category Category @relation(fields: [category_id], references: [id], onDelete: Cascade)
+
+  @@unique([category_id, locale])
+  @@unique([locale, slug])
+  @@index([locale])
+  @@map("category_translation")
 }
 
 model EntryCategory {
@@ -170,19 +215,44 @@ model EntryCategory {
 
 // ---------------------------------------------------------------------------
 // Tag
-// Lightweight cross-cutting labels.
+// Lightweight cross-cutting labels. Display names live in TagTranslation.
 // ---------------------------------------------------------------------------
 
 model Tag {
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name      String   @unique
+  /// Canonical English kebab-case identifier — never changes (e.g. "wool", "dpn", "fair-isle")
+  slug      String   @unique
   type      TagType?
   color_hex String?
 
-  entries  EntryTag[]
-  articles ArticleTag[]
+  entries      EntryTag[]
+  articles     ArticleTag[]
+  translations TagTranslation[]
 
   @@map("tag")
+}
+
+// ---------------------------------------------------------------------------
+// TagTranslation
+// Locale-specific display name for a tag. One row per locale per tag.
+// ---------------------------------------------------------------------------
+
+model TagTranslation {
+  id         String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tag_id     String            @db.Uuid
+  /// BCP-47 locale code: en, pl, de, no, fr
+  locale     String
+  /// Display name in this locale, e.g. "wełna" (pl), "wool" (en)
+  name       String
+  status     TranslationStatus @default(draft)
+  created_at DateTime          @default(now()) @db.Timestamptz
+  updated_at DateTime          @updatedAt @db.Timestamptz
+
+  tag Tag @relation(fields: [tag_id], references: [id], onDelete: Cascade)
+
+  @@unique([tag_id, locale])
+  @@index([locale])
+  @@map("tag_translation")
 }
 
 model EntryTag {

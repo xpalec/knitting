@@ -30,7 +30,7 @@ Status legend: `[ ]` not started · `[x]` done · `[-]` in progress · `[~]` def
 
 - [x] Create `src/lib/api/client.ts`
   - [x] Base `fetch` wrapper with `credentials: 'include'` (sends HttpOnly JWT cookie)
-  - [x] Auto-prefix all requests with `NEXT_PUBLIC_API_URL` env var (default `http://localhost:4000`)
+  - [x] Auto-prefix all requests with `NEXT_PUBLIC_API_URL` env var (default `http://localhost:3002`)
   - [x] Handle `401` → redirect to `/login`
   - [x] Handle `{ data, meta?, error? }` response envelope — unwrap `data` automatically
 - [x] Create typed API modules (one file per domain):
@@ -43,7 +43,7 @@ Status legend: `[ ]` not started · `[x]` done · `[-]` in progress · `[~]` def
   - [x] `src/lib/api/templates.ts` — `listTemplates()`, `updateTemplate()`
   - [x] `src/lib/api/categories.ts` — `getCategoryTree()`
   - [x] `src/lib/api/dashboard.ts` — aggregate stats (entries count, pending queue count, translation coverage)
-- [x] Add `.env.example` entry: `NEXT_PUBLIC_API_URL=http://localhost:4000`
+- [x] Add `.env.example` entry: `NEXT_PUBLIC_API_URL=http://localhost:3002`
 
 ### A3 — Zustand auth store (`src/store/auth.ts`)
 
@@ -304,5 +304,5 @@ Each phase is independently deployable — the app is usable after Phase B with 
 ---
 
 *Created: May 2026*
-*API base: `apps/api` (NestJS, port 4000)*
+*API base: `apps/api` (NestJS, port 3002)*
 *Admin app: `apps/admin` (Next.js 16, port 3001)*

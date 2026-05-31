@@ -40,7 +40,7 @@ knitting/
 |---|---|
 | `knitting` | 3000 |
 | `admin` | 3001 |
-| `api` | 4000 |
+| `api` | 3002 |
 | Postgres | 5432 |
 | Redis | 6379 |
 
@@ -461,12 +461,12 @@ R2_PUBLIC_URL=https://media.knitting.example.com
 
 ### `apps/knitting/.env`
 ```
-NEXT_PUBLIC_API_URL=http://localhost:4000
+NEXT_PUBLIC_API_URL=http://localhost:3002
 ```
 
 ### `apps/admin/.env`
 ```
-NEXT_PUBLIC_API_URL=http://localhost:4000
+NEXT_PUBLIC_API_URL=http://localhost:3002
 NEXTAUTH_SECRET=<generate with openssl rand -hex 32>
 ```
 

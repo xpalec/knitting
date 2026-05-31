@@ -1,9 +1,23 @@
 # Knitting Encyclopedia — Database Model
 
-*Document version: 2.3 — May 2026*
-*Supersedes: 03-data-model.md v2.2 (May 2026)*
+*Document version: 2.4 — May 2026*
+*Supersedes: 03-data-model.md v2.3 (May 2026)*
 
 ---
+
+## What changed in v2.4
+
+- `Category.name` removed — display name and description now live in `CategoryTranslation` rows, one per locale; English is not a special case
+- `Category.slug` removed from `Category` — locale-specific slugs live in `CategoryTranslation.slug`; the canonical internal identifier is `Category.id` (UUID)
+- `CategoryTranslation` table added — holds `name`, `slug`, `description` (TipTap JSON), and `status` per locale; mirrors the `Entry` / `Translation` pattern
+- `Category.status` added — `draft` · `published`; categories are not visible until published
+- `Category.entry_count` added — denormalised counter; updated by trigger on `EntryCategory` insert/delete; avoids expensive COUNT joins on category index pages
+- `Category.cover_image_url` added — optional CDN URL for richer category landing pages
+- `Category.metadata` added — open-ended JSONB for future language-independent properties; GIN-indexed
+- `Tag.name` removed — display name now lives in `TagTranslation` rows, one per locale
+- `Tag.slug` added — canonical internal identifier for API routing and seeding (English, kebab-case)
+- `TagTranslation` table added — holds `name` and `status` per locale; same pattern as `CategoryTranslation`
+- Overview diagram updated to reflect new translation tables
 
 ## What changed in v2.3
 
@@ -29,14 +43,16 @@
 The encyclopedia is built around a central `Entry` entity — a single knitting term such as *yarn over*, *kfb*, or *short row*. Every other table enriches, connects, or contextualises it. The model supports multilingual content, hierarchical categories, rich media, block-based page layout, pattern cross-referencing, and editorial workflows with role-based structure control.
 
 ```
-Entry        ←→  Category         (many-to-many via EntryCategory)
-Entry        ←→  Tag              (many-to-many via EntryTag)
-Entry         →  Translation      (one-to-many, unique per locale)
-Entry         →  MediaAsset       (one-to-many)
-Entry         →  PatternUsage     (one-to-many)
-Entry        ←→  Entry            (self-join via RelatedEntry)
-Entry         →  BlockTemplate    (one per entry type — seeding only)
-Category      →  Category         (self-join via parent_id)
+Entry        ←→  Category            (many-to-many via EntryCategory)
+Entry        ←→  Tag                 (many-to-many via EntryTag)
+Entry         →  Translation         (one-to-many, unique per locale)
+Entry         →  MediaAsset          (one-to-many)
+Entry         →  PatternUsage        (one-to-many)
+Entry        ←→  Entry               (self-join via RelatedEntry)
+Entry         →  BlockTemplate       (one per entry type — seeding only)
+Category      →  Category            (self-join via parent_id)
+Category      →  CategoryTranslation (one-to-many, unique per locale)
+Tag           →  TagTranslation      (one-to-many, unique per locale)
 ```
 
 ---
@@ -275,22 +291,63 @@ Permitted nodes: `paragraph`, `hard_break`, `bold` (mark), `italic` (mark), `ent
 
 ### Category
 
-Hierarchical taxonomy. Supports unlimited depth via `parent_id` self-join; 2–3 levels recommended.
+Hierarchical taxonomy. Supports unlimited depth via `parent_id` self-join; 2–3 levels recommended. Display names, descriptions, and public URL slugs live in `CategoryTranslation` — one row per locale.
+
+| Field | Type | Constraints | Notes |
+|---|---|---|---|
+| `id` | uuid | PK | UUID v7. The sole internal identifier — used in admin, API routes, seeds, and `EntryCategory` joins. Never reuse. |
+| `parent_id` | uuid | FK → Category, nullable | Null for top-level categories. |
+| `icon` | string | nullable | Icon key or SVG path — locale-independent. |
+| `sort_order` | integer | default 0 | Display ordering within parent. |
+| `status` | enum | default `draft` | `draft` · `published`. A category is not visible on the public site until published. |
+| `entry_count` | integer | default 0 | Denormalised count of published entries in this category (direct, not recursive). Updated by trigger on `EntryCategory` insert/delete. Used by the category index page to avoid COUNT joins. |
+| `cover_image_url` | string | nullable | CDN URL (Cloudflare R2). Optional cover image for richer category landing pages. |
+| `metadata` | jsonb | default `{}` | Open-ended language-independent properties. GIN-indexed. No well-known keys at launch. |
+| `created_at` | timestamptz | UTC | |
+| `updated_at` | timestamptz | UTC | |
+
+Many-to-many with `Entry` via `EntryCategory(entry_id, category_id)`.
+
+**Design notes**
+
+- `Category.id` is the only identifier on `Category`. There is no canonical slug or name on the table itself — these live in `CategoryTranslation` rows, exactly as `Entry` delegates display names and slugs to `Translation`.
+- The `en` `CategoryTranslation` row's `name` is the canonical English display name. The `en` row's `slug` is the canonical English URL segment (e.g. `stitches`, `lace-knitting`).
+- `entry_count` is a denormalised integer maintained by a trigger. It counts direct `EntryCategory` associations where the linked `Entry.status = 'published'`. Recursive counts (including subcategory entries) are computed at query time when needed.
+
+---
+
+### CategoryTranslation
+
+All locale-specific content for a category — display name, public URL slug, and rich-text description. One row per locale per category.
 
 | Field | Type | Constraints | Notes |
 |---|---|---|---|
 | `id` | uuid | PK | |
-| `name` | string | | e.g. `Stitches`, `Lace knitting` |
-| `slug` | string | unique | URL-safe identifier |
-| `parent_id` | uuid | FK → Category, nullable | Null for top-level categories |
-| `icon` | string | nullable | Icon key or SVG path |
-| `sort_order` | integer | | Display ordering within parent |
+| `category_id` | uuid | FK → Category | |
+| `locale` | string | BCP-47 | e.g. `pl`, `de`, `no`, `fr`, `en` |
+| `slug` | string | | Locale-specific public URL slug, e.g. `sciegi` for Polish, `stitches` for English. Used by middleware for URL resolution. |
+| `name` | string | | Display name in this locale, e.g. `Stitches`, `Ściegi`. |
+| `description` | jsonb | default `null` | TipTap JSON — editorial introduction to the category (e.g. "About lace knitting"). Same node schema as the `definition` content block. Nullable — not all categories have a description at launch. |
+| `status` | enum | default `draft` | `draft` · `reviewed` · `published`. Mirrors `Translation.status`. |
+| `translator_note` | text | nullable | Editorial context visible to translators and reviewers. |
+| `created_at` | timestamptz | UTC | |
+| `updated_at` | timestamptz | UTC | |
 
-Many-to-many with `Entry` via `EntryCategory(entry_id, category_id)`.
+Unique constraints: `(category_id, locale)` and `(locale, slug)`.
+
+**URL resolution**
+
+Middleware passes `{ locale, slug }` to the API. The API resolves via `WHERE locale = $1 AND slug = $2` on `CategoryTranslation`, then joins to `Category`. `Category.id` is never exposed in public URLs.
+
+**`description` node schema**
+
+Permitted TipTap nodes: `paragraph`, `heading` (h2, h3), `bold` (mark), `italic` (mark), `hard_break`, `entry_link` (custom inline: `{ entryId, term }` — links to an entry by UUID). Same permitted nodes as the `definition` content block on entries.
+
+---
 
 **Top-level categories**
 
-| Category | Representative subcategories |
+| Category (English) | Representative subcategories |
 |---|---|
 | Stitches | Basic stitches, Increases, Decreases, Slip & twist |
 | Techniques | Cast-on methods, Bind-off methods, Colorwork, Lace, Cables |
@@ -304,16 +361,40 @@ Many-to-many with `Entry` via `EntryCategory(entry_id, category_id)`.
 
 ### Tag
 
-Lightweight labels for cross-cutting concerns that don't fit the category hierarchy.
+Lightweight labels for cross-cutting concerns that don't fit the category hierarchy. Display names live in `TagTranslation` — one row per locale.
 
 | Field | Type | Constraints | Notes |
 |---|---|---|---|
 | `id` | uuid | PK | |
-| `name` | string | unique | e.g. `wool`, `dpn`, `sleeve`, `fair-isle` |
-| `type` | enum | | `fiber_type` · `needle_type` · `garment_part` · `style_tradition` |
-| `color_hex` | string | nullable | For UI badge rendering |
+| `slug` | string | unique | Canonical English kebab-case identifier, e.g. `wool`, `dpn`, `sleeve`, `fair-isle`. Used in admin, API routes, and seeds. Never changes. |
+| `type` | enum | | `fiber_type` · `needle_type` · `garment_part` · `style_tradition` — language-independent classification. |
+| `color_hex` | string | nullable | For UI badge rendering — locale-independent. |
 
 Many-to-many with `Entry` via `EntryTag(entry_id, tag_id)`.
+
+**Design notes**
+
+- `Tag.slug` is the canonical internal identifier (replaces the old `name` unique constraint). It is always English kebab-case and never changes.
+- Display names per locale live in `TagTranslation.name`. The `en` row's `name` is the canonical English display name.
+- Tags are simpler than categories — no hierarchy, no description, no status lifecycle beyond the translation row's own status.
+
+---
+
+### TagTranslation
+
+Locale-specific display name for a tag. One row per locale per tag.
+
+| Field | Type | Constraints | Notes |
+|---|---|---|---|
+| `id` | uuid | PK | |
+| `tag_id` | uuid | FK → Tag | |
+| `locale` | string | BCP-47 | e.g. `pl`, `de`, `no`, `fr`, `en` |
+| `name` | string | | Display name in this locale, e.g. `wełna` (Polish), `wool` (English). |
+| `status` | enum | default `draft` | `draft` · `reviewed` · `published`. |
+| `created_at` | timestamptz | UTC | |
+| `updated_at` | timestamptz | UTC | |
+
+Unique constraint: `(tag_id, locale)`.
 
 ---
 
@@ -494,6 +575,11 @@ Used by: `Entry.metadata.skill_level`, `PatternUsage.skill_level`, technique blo
 
 ### `translation_status`
 `draft` · `reviewed` · `published`
+Used by: `Translation.status`, `CategoryTranslation.status`, `TagTranslation.status`
+
+### `category_status`
+`draft` · `published`
+Used by: `Category.status`
 
 ### `media_type`
 `image` · `diagram` · `video_clip` · `chart`
@@ -533,6 +619,13 @@ Used by: `Entry.metadata.skill_level`, `PatternUsage.skill_level`, technique blo
 | `BlockTemplate` per entry type | Default layouts per entry type. Applies to newly created entries only. |
 | `PatternUsage.skill_level` as typed enum | Context-sensitive override of `Entry.metadata.skill_level` with an explicit constraint. A *cast-on* is beginner in a dishcloth, intermediate in a provisional join. |
 | `status = 'deprecated'` instead of hard delete | Deprecated entries remain accessible and are still referenced by historical patterns. |
+| No `name` or `slug` on `Category` | Mirrors the `Entry` pattern. The `en` `CategoryTranslation` row holds the English display name and slug. English is not a special case. |
+| `Category.id` (UUID) as sole internal identifier | Used in admin, API, seeds, and `EntryCategory` joins. No human-readable slug needed for internal routing. |
+| `CategoryTranslation.slug` as the public URL identifier | Each locale gets a native category slug (e.g. `sciegi` in Polish, `stitches` in English). Resolved by the `(locale, slug)` unique index. Consistent with `Translation.slug` on entries. |
+| `CategoryTranslation.description` as TipTap JSON | Rich-text editorial introduction per locale. Same node schema as the `definition` content block — reuses existing rendering infrastructure. Nullable at launch. |
+| `Category.entry_count` as denormalised integer | Avoids expensive COUNT joins on the category index page. Maintained by trigger on `EntryCategory` insert/delete. Counts only direct associations where `Entry.status = 'published'`. |
+| `Tag.slug` as canonical internal identifier | Replaces the old `name` unique constraint. Always English kebab-case, never changes. Display names per locale live in `TagTranslation.name`. |
+| `TagTranslation` for tag display names | Tags appear in filter bars, badges, and article tag lists — all of which need locale-native labels. Consistent with `CategoryTranslation`. No description needed (tags are labels, not editorial content). |
 | All timestamps UTC | Format for display in the UI layer only. |
 | UUID v7 for all primary keys | Time-ordered for index locality. |
 
@@ -544,6 +637,7 @@ Used by: `Entry.metadata.skill_level`, `PatternUsage.skill_level`, technique blo
 CREATE TYPE skill_level_enum       AS ENUM ('beginner','intermediate','advanced','expert');
 CREATE TYPE entry_status_enum      AS ENUM ('draft','review','published','deprecated');
 CREATE TYPE trans_status_enum      AS ENUM ('draft','reviewed','published');
+CREATE TYPE category_status_enum   AS ENUM ('draft','published');
 CREATE TYPE relation_type_enum     AS ENUM ('synonym','antonym','prerequisite','variant_regional','variant_technique','broader','narrower');
 CREATE TYPE media_type_enum        AS ENUM ('image','diagram','video_clip','chart');
 CREATE TYPE tag_type_enum          AS ENUM ('fiber_type','needle_type','garment_part','style_tradition');
@@ -614,13 +708,55 @@ CREATE TRIGGER translation_search_vector_trigger
 
 -- Category
 CREATE TABLE category (
-  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  name       text NOT NULL,
-  slug       text UNIQUE NOT NULL,
-  parent_id  uuid REFERENCES category(id),
-  icon       text,
-  sort_order integer NOT NULL DEFAULT 0
+  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  parent_id        uuid REFERENCES category(id),
+  icon             text,
+  sort_order       integer NOT NULL DEFAULT 0,
+  status           category_status_enum NOT NULL DEFAULT 'draft',
+  entry_count      integer NOT NULL DEFAULT 0,
+  cover_image_url  text,
+  metadata         jsonb NOT NULL DEFAULT '{}',
+  created_at       timestamptz NOT NULL DEFAULT now(),
+  updated_at       timestamptz NOT NULL DEFAULT now()
 );
+CREATE INDEX category_parent_idx   ON category(parent_id);
+CREATE INDEX category_metadata_idx ON category USING GIN(metadata);
+
+CREATE TABLE category_translation (
+  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  category_id      uuid NOT NULL REFERENCES category(id) ON DELETE CASCADE,
+  locale           text NOT NULL,
+  slug             text NOT NULL,
+  name             text NOT NULL,
+  description      jsonb DEFAULT NULL,
+  status           trans_status_enum NOT NULL DEFAULT 'draft',
+  translator_note  text,
+  created_at       timestamptz NOT NULL DEFAULT now(),
+  updated_at       timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (category_id, locale),
+  UNIQUE (locale, slug)
+);
+CREATE INDEX category_translation_locale_idx ON category_translation(locale);
+
+-- Trigger to maintain Category.entry_count
+CREATE OR REPLACE FUNCTION entry_category_count_update() RETURNS trigger AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    UPDATE category SET entry_count = entry_count + 1
+    WHERE id = NEW.category_id
+      AND EXISTS (SELECT 1 FROM entry WHERE id = NEW.entry_id AND status = 'published');
+  ELSIF TG_OP = 'DELETE' THEN
+    UPDATE category SET entry_count = GREATEST(entry_count - 1, 0)
+    WHERE id = OLD.category_id
+      AND EXISTS (SELECT 1 FROM entry WHERE id = OLD.entry_id AND status = 'published');
+  END IF;
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER entry_category_count_trigger
+  AFTER INSERT OR DELETE ON entry_category
+  FOR EACH ROW EXECUTE FUNCTION entry_category_count_update();
 
 CREATE TABLE entry_category (
   entry_id    uuid REFERENCES entry(id) ON DELETE CASCADE,
@@ -631,10 +767,22 @@ CREATE TABLE entry_category (
 -- Tag
 CREATE TABLE tag (
   id        uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  name      text UNIQUE NOT NULL,
+  slug      text UNIQUE NOT NULL,
   type      tag_type_enum,
   color_hex text
 );
+
+CREATE TABLE tag_translation (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tag_id      uuid NOT NULL REFERENCES tag(id) ON DELETE CASCADE,
+  locale      text NOT NULL,
+  name        text NOT NULL,
+  status      trans_status_enum NOT NULL DEFAULT 'draft',
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  updated_at  timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (tag_id, locale)
+);
+CREATE INDEX tag_translation_locale_idx ON tag_translation(locale);
 
 CREATE TABLE entry_tag (
   entry_id uuid REFERENCES entry(id) ON DELETE CASCADE,

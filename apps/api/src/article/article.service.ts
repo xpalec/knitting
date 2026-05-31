@@ -5,17 +5,29 @@ import { PrismaService } from '../prisma/prisma.service';
 export class ArticleService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(tag?: string, countryCode?: string) {
+  async findAll(locale = 'en', tag?: string, countryCode?: string) {
     const where: Record<string, unknown> = { status: 'published' };
     if (countryCode) where['country_code'] = countryCode;
     if (tag) {
-      where['tags'] = { some: { tag: { name: tag } } };
+      // Filter by tag slug (canonical identifier) — locale-independent
+      where['tags'] = { some: { tag: { slug: tag } } };
     }
 
     const articles = await this.prisma.article.findMany({
       where,
       include: {
-        tags: { include: { tag: { select: { name: true, type: true } } } },
+        tags: {
+          include: {
+            tag: {
+              include: {
+                translations: {
+                  where: { locale, status: 'published' },
+                  select: { name: true, locale: true },
+                },
+              },
+            },
+          },
+        },
       },
       orderBy: { published_at: 'desc' },
     });
@@ -29,16 +41,32 @@ export class ArticleService {
         country_code: a.country_code,
         reading_time_minutes: a.reading_time_minutes,
         published_at: a.published_at,
-        tags: a.tags.map((at) => ({ name: at.tag.name, type: at.tag.type })),
+        tags: a.tags.map((at) => ({
+          slug: at.tag.slug,
+          type: at.tag.type,
+          // Falls back to slug if no translation exists for the locale
+          name: at.tag.translations[0]?.name ?? at.tag.slug,
+        })),
       })),
     };
   }
 
-  async findBySlug(slug: string) {
+  async findBySlug(slug: string, locale = 'en') {
     const article = await this.prisma.article.findUnique({
       where: { slug },
       include: {
-        tags: { include: { tag: { select: { name: true, type: true } } } },
+        tags: {
+          include: {
+            tag: {
+              include: {
+                translations: {
+                  where: { locale, status: 'published' },
+                  select: { name: true, locale: true },
+                },
+              },
+            },
+          },
+        },
       },
     });
 
@@ -55,8 +83,9 @@ export class ArticleService {
         reading_time_minutes: article.reading_time_minutes,
         published_at: article.published_at,
         tags: article.tags.map((at) => ({
-          name: at.tag.name,
+          slug: at.tag.slug,
           type: at.tag.type,
+          name: at.tag.translations[0]?.name ?? at.tag.slug,
         })),
       },
     };

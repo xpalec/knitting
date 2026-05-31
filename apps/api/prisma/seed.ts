@@ -1,6 +1,8 @@
 /**
  * Prisma seed — minimal bootstrap data
  * 5 BlockTemplates + 3 entries (en + pl translations each)
+ * 7 top-level categories (en + pl translations each)
+ * 4 tags (en + pl translations each)
  * Run: pnpm prisma db seed
  */
 import 'dotenv/config';
@@ -33,11 +35,11 @@ const steps = (name: string, difficulty: string, list: string[]) => ({
 // Block Templates (one per entry type)
 // ---------------------------------------------------------------------------
 const TEMPLATES = [
-  { entry_type: 'stitch',      blocks: [blk('def',1,'definition'), blk('tech',2,'technique'), blk('callout',3,'callout',{variant:'tip'}), blk('related',4,'related'), blk('pattern',5,'pattern_usage')] },
-  { entry_type: 'technique',   blocks: [blk('def',1,'definition'), blk('tech1',2,'technique'), blk('tech2',3,'technique'), blk('related',4,'related')] },
-  { entry_type: 'tool',        blocks: [blk('def',1,'definition'), blk('callout',2,'callout',{variant:'tip'}), blk('related',3,'related')] },
-  { entry_type: 'tradition',   blocks: [blk('def',1,'definition'), blk('tech',2,'technique'), blk('related',3,'related'), blk('pattern',4,'pattern_usage')] },
-  { entry_type: 'yarn_weight', blocks: [blk('def',1,'definition'), blk('callout',2,'callout',{variant:'tip'}), blk('related',3,'related')] },
+  { entry_type: 'stitch',      blocks: [blk('def','definition',1), blk('tech','technique',2), blk('callout','callout',3,{variant:'tip'}), blk('related','related',4), blk('pattern','pattern_usage',5)] },
+  { entry_type: 'technique',   blocks: [blk('def','definition',1), blk('tech1','technique',2), blk('tech2','technique',3), blk('related','related',4)] },
+  { entry_type: 'tool',        blocks: [blk('def','definition',1), blk('callout','callout',2,{variant:'tip'}), blk('related','related',3)] },
+  { entry_type: 'tradition',   blocks: [blk('def','definition',1), blk('tech','technique',2), blk('related','related',3), blk('pattern','pattern_usage',4)] },
+  { entry_type: 'yarn_weight', blocks: [blk('def','definition',1), blk('callout','callout',2,{variant:'tip'}), blk('related','related',3)] },
 ];
 
 // ---------------------------------------------------------------------------
@@ -158,10 +160,124 @@ async function main() {
   console.log('  3 Entry rows, 6 Translation rows');
 
   // Verify trigger populated search_vector
-  const result = await prisma.$queryRaw<{ count: bigint }[]>`
+  const svResult = await prisma.$queryRaw<{ count: bigint }[]>`
     SELECT COUNT(*)::bigint AS count FROM translation WHERE search_vector IS NOT NULL
   `;
-  console.log(`  search_vector populated on ${result[0].count} Translation rows`);
+  console.log(`  search_vector populated on ${svResult[0].count} Translation rows`);
+
+  // ---------------------------------------------------------------------------
+  // Categories — 7 top-level, en + pl translations each
+  // ---------------------------------------------------------------------------
+  const CATEGORIES = [
+    {
+      slug_en: 'stitches', name_en: 'Stitches',
+      slug_pl: 'sciegi',   name_pl: 'Ściegi',
+      sort_order: 0,
+    },
+    {
+      slug_en: 'techniques', name_en: 'Techniques',
+      slug_pl: 'techniki',   name_pl: 'Techniki',
+      sort_order: 1,
+    },
+    {
+      slug_en: 'tools-and-materials', name_en: 'Tools & materials',
+      slug_pl: 'narzedzia-i-materialy', name_pl: 'Narzędzia i materiały',
+      sort_order: 2,
+    },
+    {
+      slug_en: 'yarn-and-fiber', name_en: 'Yarn & fiber',
+      slug_pl: 'wloczka-i-wlokno', name_pl: 'Włóczka i włókno',
+      sort_order: 3,
+    },
+    {
+      slug_en: 'construction', name_en: 'Construction',
+      slug_pl: 'konstrukcja',   name_pl: 'Konstrukcja',
+      sort_order: 4,
+    },
+    {
+      slug_en: 'finishing', name_en: 'Finishing',
+      slug_pl: 'wykanczanie', name_pl: 'Wykańczanie',
+      sort_order: 5,
+    },
+    {
+      slug_en: 'traditions-and-styles', name_en: 'Traditions & styles',
+      slug_pl: 'tradycje-i-style',     name_pl: 'Tradycje i style',
+      sort_order: 6,
+    },
+  ];
+
+  for (const cat of CATEGORIES) {
+    const existing = await prisma.categoryTranslation.findUnique({
+      where: { locale_slug: { locale: 'en', slug: cat.slug_en } },
+    });
+    if (existing) continue; // idempotent
+
+    const category = await prisma.category.create({
+      data: { sort_order: cat.sort_order, status: 'published' },
+    });
+    await prisma.categoryTranslation.createMany({
+      data: [
+        { category_id: category.id, locale: 'en', slug: cat.slug_en, name: cat.name_en, status: 'published' },
+        { category_id: category.id, locale: 'pl', slug: cat.slug_pl, name: cat.name_pl, status: 'published' },
+      ],
+    });
+  }
+  console.log(`  ${CATEGORIES.length} Category rows, ${CATEGORIES.length * 2} CategoryTranslation rows`);
+
+  // Assign the 3 seed entries to the "Stitches" category
+  const stitchesCt = await prisma.categoryTranslation.findUnique({
+    where: { locale_slug: { locale: 'en', slug: 'stitches' } },
+  });
+  if (stitchesCt) {
+    for (const entryId of [yo.id, k2tog.id, brioche.id]) {
+      await prisma.entryCategory.upsert({
+        where: { entry_id_category_id: { entry_id: entryId, category_id: stitchesCt.category_id } },
+        update: {},
+        create: { entry_id: entryId, category_id: stitchesCt.category_id },
+      });
+    }
+    // Manually sync entry_count (trigger fires on insert, but upsert may not fire it in all Postgres versions)
+    await prisma.$executeRaw`
+      UPDATE category SET entry_count = (
+        SELECT COUNT(*) FROM entry_category ec
+        JOIN entry e ON e.id = ec.entry_id
+        WHERE ec.category_id = category.id AND e.status = 'published'
+      ) WHERE id = ${stitchesCt.category_id}::uuid
+    `;
+    console.log('  3 entries assigned to Stitches category');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Tags — 4 tags, en + pl translations each
+  // ---------------------------------------------------------------------------
+  const TAGS = [
+    { slug: 'wool',      type: 'fiber_type',      color_hex: '#8B4513', name_en: 'Wool',      name_pl: 'Wełna'     },
+    { slug: 'dpn',       type: 'needle_type',     color_hex: '#4682B4', name_en: 'DPN',       name_pl: 'Druty DPN' },
+    { slug: 'lace',      type: 'style_tradition', color_hex: '#DDA0DD', name_en: 'Lace',      name_pl: 'Koronka'   },
+    { slug: 'fair-isle', type: 'style_tradition', color_hex: '#228B22', name_en: 'Fair Isle', name_pl: 'Fair Isle' },
+  ];
+
+  for (const tag of TAGS) {
+    const t = await prisma.tag.upsert({
+      where: { slug: tag.slug },
+      update: { color_hex: tag.color_hex },
+      create: { slug: tag.slug, type: tag.type as never, color_hex: tag.color_hex },
+    });
+    for (const [locale, name] of [['en', tag.name_en], ['pl', tag.name_pl]]) {
+      await prisma.tagTranslation.upsert({
+        where: { tag_id_locale: { tag_id: t.id, locale } },
+        update: { name },
+        create: { tag_id: t.id, locale, name, status: 'published' },
+      });
+    }
+  }
+  console.log(`  ${TAGS.length} Tag rows, ${TAGS.length * 2} TagTranslation rows`);
+
+  // Verify trigger populated search_vector (final check)
+  const svFinalResult = await prisma.$queryRaw<{ count: bigint }[]>`
+    SELECT COUNT(*)::bigint AS count FROM translation WHERE search_vector IS NOT NULL
+  `;
+  console.log(`  search_vector populated on ${svFinalResult[0].count} Translation rows`);
 
   // Users
   for (const u of USERS) {

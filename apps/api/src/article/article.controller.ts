@@ -11,19 +11,25 @@ export class ArticleController {
   @Public()
   @Get()
   @ApiOperation({ summary: 'List articles with optional tag and country filter' })
+  @ApiQuery({ name: 'locale', required: false, example: 'en' })
   @ApiQuery({ name: 'tag', required: false })
   @ApiQuery({ name: 'country', required: false })
   findAll(
+    @Query('locale') locale = 'en',
     @Query('tag') tag?: string,
     @Query('country') country?: string,
   ) {
-    return this.articleService.findAll(tag, country);
+    return this.articleService.findAll(locale, tag, country);
   }
 
   @Public()
   @Get(':slug')
   @ApiOperation({ summary: 'Full article detail' })
-  findOne(@Param('slug') slug: string) {
-    return this.articleService.findBySlug(slug);
+  @ApiQuery({ name: 'locale', required: false, example: 'en' })
+  findOne(
+    @Param('slug') slug: string,
+    @Query('locale') locale = 'en',
+  ) {
+    return this.articleService.findBySlug(slug, locale);
   }
 }

@@ -28,7 +28,14 @@ export class EntryService {
 
     const where: Record<string, unknown> = { status: 'published' };
     if (category) {
-      where['categories'] = { some: { category: { slug: category } } };
+      // category filter uses locale-specific slug via CategoryTranslation
+      where['categories'] = {
+        some: {
+          category: {
+            translations: { some: { locale, slug: category } },
+          },
+        },
+      };
     }
     if (skillLevel) {
       where['metadata'] = { path: ['skill_level'], equals: skillLevel };
@@ -48,7 +55,16 @@ export class EntryService {
             },
           },
           categories: {
-            include: { category: { select: { name: true, slug: true } } },
+            include: {
+              category: {
+                include: {
+                  translations: {
+                    where: { locale, status: 'published' },
+                    select: { name: true, slug: true, locale: true },
+                  },
+                },
+              },
+            },
           },
         },
         skip,
@@ -70,10 +86,14 @@ export class EntryService {
         abbreviation: tMeta['abbreviation'] ?? null,
         definition_short: tMeta['definition_short'] ?? null,
         missing_translation: !translation,
-        categories: e.categories.map((ec) => ({
-          name: ec.category.name,
-          slug: ec.category.slug,
-        })),
+        categories: e.categories.map((ec) => {
+          const ct =
+            ec.category.translations[0] ?? null;
+          return {
+            name: ct?.name ?? null,
+            slug: ct?.slug ?? null,
+          };
+        }),
       };
     });
 
@@ -110,7 +130,16 @@ export class EntryService {
             },
             pattern_usage: true,
             categories: {
-              include: { category: { select: { name: true, slug: true } } },
+              include: {
+                category: {
+                  include: {
+                    translations: {
+                      where: { locale, status: 'published' },
+                      select: { name: true, slug: true, locale: true },
+                    },
+                  },
+                },
+              },
             },
             related_from: {
               include: {
@@ -152,10 +181,13 @@ export class EntryService {
         blocks: translation.blocks,
         translator_note: translation.translator_note,
         translation_status: translation.status,
-        categories: entry.categories.map((ec) => ({
-          name: ec.category.name,
-          slug: ec.category.slug,
-        })),
+        categories: entry.categories.map((ec) => {
+          const ct = ec.category.translations[0] ?? null;
+          return {
+            name: ct?.name ?? null,
+            slug: ct?.slug ?? null,
+          };
+        }),
         translations: entry.translations.map((t) => ({
           locale: t.locale,
           slug: t.slug,
