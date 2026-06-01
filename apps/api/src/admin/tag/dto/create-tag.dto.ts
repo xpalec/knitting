@@ -30,4 +30,15 @@ export class CreateTagDto {
   @IsString()
   @MaxLength(120)
   declare name_en: string;
+
+  @ApiProperty({
+    example: 'fair-isle',
+    description: 'English slug for the en TagTranslation (defaults to the canonical tag slug if omitted)',
+  })
+  @IsOptional()
+  @IsString()
+  @Matches(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, {
+    message: 'slug_en must be lowercase kebab-case',
+  })
+  slug_en?: string;
 }

@@ -7,4 +7,5 @@ export * from './media';
 export * from './users';
 export * from './templates';
 export * from './categories';
+export * from './tags';
 export * from './dashboard';

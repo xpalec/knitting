@@ -1,11 +1,21 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsIn, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
 
 export class UpsertTagTranslationDto {
   @ApiProperty({ example: 'Fair Isle' })
   @IsString()
   @MaxLength(120)
   declare name: string;
+
+  @ApiProperty({
+    example: 'fair-isle',
+    description: 'Locale-specific URL slug (kebab-case)',
+  })
+  @IsString()
+  @Matches(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, {
+    message: 'slug must be lowercase kebab-case (e.g. fair-isle)',
+  })
+  declare slug: string;
 
   @ApiPropertyOptional({
     description: 'TipTap JSON — editorial description shown on the public tag page',

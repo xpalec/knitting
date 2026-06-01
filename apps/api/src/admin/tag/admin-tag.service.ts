@@ -32,6 +32,7 @@ export class AdminTagService {
             select: {
               locale: true,
               name: true,
+              slug: true,
               seo_title: true,
               seo_description: true,
               status: true,
@@ -88,6 +89,7 @@ export class AdminTagService {
         translations: {
           create: {
             locale: 'en',
+            slug: dto.slug_en ?? dto.slug,
             name: dto.name_en,
             status: 'draft',
           },
@@ -148,6 +150,7 @@ export class AdminTagService {
       create: {
         tag_id: tag.id,
         locale,
+        slug: dto.slug,
         name: dto.name,
         description: (dto.description ?? null) as never,
         seo_title: dto.seo_title ?? null,
@@ -155,6 +158,7 @@ export class AdminTagService {
         status: (dto.status as never) ?? 'draft',
       },
       update: {
+        slug: dto.slug,
         name: dto.name,
         ...(dto.description !== undefined && { description: dto.description as never }),
         ...(dto.seo_title !== undefined && { seo_title: dto.seo_title }),

@@ -138,7 +138,7 @@ describe('AdminTagService', () => {
         description: null, seo_title: null, seo_description: null, status: 'draft',
       });
 
-      const result = await service.upsertTranslation('wool', 'pl', { name: 'Wełna' });
+      const result = await service.upsertTranslation('wool', 'pl', { name: 'Wełna', slug: 'welna' });
 
       expect(result.data.name).toBe('Wełna');
       expect(mockPrisma.tagTranslation.upsert).toHaveBeenCalledWith(
@@ -151,7 +151,7 @@ describe('AdminTagService', () => {
     it('throws NotFoundException for unknown tag slug', async () => {
       mockPrisma.tag.findUnique.mockResolvedValue(null);
       await expect(
-        service.upsertTranslation('nonexistent', 'pl', { name: 'Test' }),
+        service.upsertTranslation('nonexistent', 'pl', { name: 'Test', slug: 'test' }),
       ).rejects.toThrow(NotFoundException);
     });
   });
