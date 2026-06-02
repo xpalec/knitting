@@ -32,6 +32,10 @@ export interface Entry {
     definition_short?: string;
     [key: string]: unknown;
   };
+  // Present on list responses (flat projection from the API)
+  term?: string | null;
+  slug?: string | null;
+  // Present on single-entry responses
   translations: Translation[];
   content_blocks: ContentBlock[];
   created_at: string;

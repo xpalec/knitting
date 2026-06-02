@@ -61,8 +61,8 @@ export class AdminEntryService {
         where,
         include: {
           translations: {
-            where: { locale: 'en' },
-            select: { term: true, slug: true },
+            select: { locale: true, term: true, slug: true },
+            orderBy: { locale: 'asc' },
           },
           categories: {
             include: {
@@ -85,17 +85,22 @@ export class AdminEntryService {
     ]);
 
     return {
-      data: entries.map((e) => ({
-        id: e.id,
-        origin_language: e.origin_language,
-        status: e.status,
-        metadata: e.metadata,
-        term: e.translations[0]?.term ?? null,
-        slug: e.translations[0]?.slug ?? null,
-        categories: e.categories.map((ec) => ec.category.translations[0]?.slug ?? ec.category.id),
-        created_at: e.created_at,
-        updated_at: e.updated_at,
-      })),
+      data: entries.map((e) => {
+        const enTranslation = e.translations.find((t) => t.locale === 'en');
+        const firstTranslation = e.translations[0];
+        const displayTranslation = enTranslation ?? firstTranslation;
+        return {
+          id: e.id,
+          origin_language: e.origin_language,
+          status: e.status,
+          metadata: e.metadata,
+          term: displayTranslation?.term ?? null,
+          slug: displayTranslation?.slug ?? null,
+          categories: e.categories.map((ec) => ec.category.translations[0]?.slug ?? ec.category.id),
+          created_at: e.created_at,
+          updated_at: e.updated_at,
+        };
+      }),
       meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
     };
   }

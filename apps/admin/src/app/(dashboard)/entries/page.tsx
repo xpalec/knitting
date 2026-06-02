@@ -235,6 +235,8 @@ function SkeletonRows() {
 // ---------------------------------------------------------------------------
 
 function getEnTerm(entry: Entry): string {
+  // List responses return a flat `term` field; detail responses include translations[]
+  if (entry.term) return entry.term;
   const translations = entry.translations ?? [];
   return (
     translations.find((t) => t.locale === 'en')?.term ??
