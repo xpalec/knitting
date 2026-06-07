@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
 
 export class CreateCategoryDto {
   @ApiProperty({ enum: ['entry', 'abbreviation', 'article'] })
@@ -7,12 +7,13 @@ export class CreateCategoryDto {
   declare type: string;
 
   @ApiPropertyOptional({
-    description: 'Parent category UUID. Omit for top-level categories.',
+    description: 'Parent category UUID. Omit or pass null for top-level categories.',
     example: 'a1b2c3d4-...',
+    nullable: true,
   })
   @IsOptional()
   @IsUUID()
-  parent_id?: string;
+  parent_id?: string | null;
 
   @ApiPropertyOptional({ example: 'stitch', description: 'Icon key or SVG path — locale-independent' })
   @IsOptional()
@@ -22,27 +23,27 @@ export class CreateCategoryDto {
 
   @ApiPropertyOptional({ example: 0 })
   @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(9999)
   sort_order?: number;
 
-  @ApiPropertyOptional({ example: 'https://cdn.example.com/stitches.jpg' })
+  @ApiPropertyOptional({ example: 'https://cdn.example.com/stitches.jpg', nullable: true })
   @IsOptional()
   @IsString()
-  cover_image_url?: string;
+  cover_image_url?: string | null;
 
-  // Seed the English translation inline for convenience
-  @ApiProperty({
-    example: 'Stitches',
-    description: 'English display name — seeds the en CategoryTranslation',
-  })
-  @IsString()
-  @MaxLength(120)
-  declare name_en: string;
+  @ApiPropertyOptional({ enum: ['draft', 'published'], default: 'draft' })
+  @IsOptional()
+  @IsIn(['draft', 'published'])
+  status?: string;
 
-  @ApiProperty({
-    example: 'stitches',
-    description: 'English URL slug — seeds the en CategoryTranslation',
+  @ApiPropertyOptional({
+    example: '#a78bfa',
+    description: 'Accent color hex. Randomly assigned if omitted.',
   })
+  @IsOptional()
   @IsString()
-  @MaxLength(120)
-  declare slug_en: string;
+  @MaxLength(9)
+  color?: string;
 }

@@ -59,17 +59,38 @@ Implement the Categories management section across three layers: API (NestJS/Pri
     - Assert: `validate(dto)` from `class-validator` returns errors on the `type` field
     - File: `apps/api/src/admin/category/__tests__/invalid-type-rejection.property.spec.ts`
 
-- [x] 3. Checkpoint — API layer complete
+- [ ] 3. Add `short_description`, `seo_title`, `seo_description` to Prisma `CategoryTranslation` model
+  - Add `short_description String?`, `seo_title String?`, `seo_description String?` fields to `CategoryTranslation` in `apps/api/prisma/schema.prisma`
+  - Run `pnpm prisma migrate dev --name add_category_translation_seo_fields` inside `apps/api`
+  - Regenerate the Prisma client (`pnpm prisma generate`)
+  - _Requirements: 9.1_
+
+- [ ] 4. Update `UpsertTranslationDto` to accept and validate new SEO fields
+  - Add optional `@IsOptional() @IsString() @MaxLength(60) seo_title?: string` with `@ApiPropertyOptional`
+  - Add optional `@IsOptional() @IsString() @MaxLength(160) seo_description?: string` with `@ApiPropertyOptional`
+  - Add optional `@IsOptional() @IsString() short_description?: string` with `@ApiPropertyOptional`
+  - Ensure `AdminCategoryService.upsertTranslation` passes these fields to `prisma.categoryTranslation.upsert`
+  - Ensure all three fields are included in every `CategoryTranslation` response object
+  - _Requirements: 9.1, 9.2, 9.5_
+
+  - [ ]* 4.1 Write unit tests for `UpsertTranslationDto` validation
+    - Test `seo_title` > 60 chars returns HTTP 400
+    - Test `seo_description` > 160 chars returns HTTP 400
+    - Test valid payload with all three new fields is persisted and returned
+    - File: `apps/api/src/admin/category/admin-category.service.spec.ts` (extend existing)
+    - _Requirements: 9.5_
+
+- [x] 5. Checkpoint — API layer complete
   - Ensure all API unit and property tests pass, ask the user if questions arise.
 
-- [x] 4. Expand `apps/admin/src/lib/api/categories.ts` with `adminCategoriesApi`
-  - [x] 4.1 Add all TypeScript types and interfaces
+- [x] 6. Expand `apps/admin/src/lib/api/categories.ts` with `adminCategoriesApi`
+  - [x] 6.1 Add all TypeScript types and interfaces
     - Export `CategoryType`, `CategoryStatus`, `TranslationStatus` union types
-    - Export `AdminCategoryTranslation`, `AdminCategory`, `AdminCategoryListParams`, `CreateCategoryPayload`, `UpdateCategoryPayload`, `UpsertTranslationPayload` interfaces matching the API contract in the design
+    - Export `AdminCategoryTranslation` (with `short_description`, `seo_title`, `seo_description`), `AdminCategory`, `AdminCategoryListParams`, `CreateCategoryPayload` (no `name_en`/`slug_en`, has `parent_id`), `UpdateCategoryPayload` (has `parent_id`), `UpsertTranslationPayload` (has `short_description`, `seo_title`, `seo_description`) interfaces matching the API contract in the design
     - Preserve the existing `CategoryNode` interface and `categoriesApi` export unchanged
-    - _Requirements: 2.7_
+    - _Requirements: 2.7, 2.8_
 
-  - [x] 4.2 Implement the `adminCategoriesApi` object
+  - [x] 6.2 Implement the `adminCategoriesApi` object
     - `listCategories(params?)` → `apiGetWithMeta<AdminCategory[]>('/api/v1/admin/categories', params)`
     - `getCategory(id)` → `apiGet<AdminCategory>('/api/v1/admin/categories/:id')`
     - `createCategory(dto)` → `apiPost<AdminCategory>('/api/v1/admin/categories', dto)`
@@ -78,36 +99,36 @@ Implement the Categories management section across three layers: API (NestJS/Pri
     - `upsertTranslation(id, locale, dto)` → `apiPut<AdminCategoryTranslation>('/api/v1/admin/categories/:id/translations/:locale', dto)`
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.8_
 
-  - [ ]* 4.3 Write property test — Property 3: API client error propagation
+  - [ ]* 6.3 Write property test — Property 3: API client error propagation
     - **Property 3: API client error propagation**
-    - **Validates: Requirements 2.8**
+    - **Validates: Requirements 2.9**
     - Generate: HTTP status codes from `[400, 401, 403, 404, 409, 422, 500, 502, 503]`
     - Assert: each `adminCategoriesApi` function throws `ApiError` with matching `status`
     - Use `jest.spyOn(global, 'fetch')` to mock responses
     - File: `apps/admin/src/__tests__/api/categories-error-propagation.property.spec.ts`
 
-  - [ ]* 4.4 Write property test — Property 4: create-then-fetch round-trip
+  - [ ]* 6.4 Write property test — Property 4: create-then-fetch round-trip
     - **Property 4: Create-then-fetch round-trip**
-    - **Validates: Requirements 2.3, 2.7**
-    - Generate: random valid `CreateCategoryPayload` (type from enum, name/slug as non-empty strings)
-    - Assert: mocked `createCategory` returns payload fields; mocked `getCategory` returns same fields
+    - **Validates: Requirements 2.3, 2.8**
+    - Generate: random valid `CreateCategoryPayload` (type from enum, optional parent_id as UUID or null; no `name_en`/`slug_en`)
+    - Assert: mocked `createCategory` returns payload fields; mocked `getCategory` returns same language-independent fields
     - File: `apps/admin/src/__tests__/api/categories-create-fetch-roundtrip.property.spec.ts`
 
-  - [ ]* 4.5 Write property test — Property 5: translation upsert round-trip
+  - [ ]* 6.5 Write property test — Property 5: translation upsert round-trip
     - **Property 5: Translation upsert round-trip**
     - **Validates: Requirements 2.6**
-    - Generate: random locale string and `UpsertTranslationPayload`
-    - Assert: after upsert, the category's translations array contains the locale with matching `name`/`slug`
+    - Generate: random locale string and `UpsertTranslationPayload` including optional `short_description`, `seo_title` (≤60 chars), `seo_description` (≤160 chars)
+    - Assert: after upsert, the category's translations array contains the locale with matching `name`, `slug`, `short_description`, `seo_title`, `seo_description`
     - File: `apps/admin/src/__tests__/api/categories-translation-roundtrip.property.spec.ts`
 
-- [x] 5. Add Categories nav item to the sidebar
+- [x] 7. Add Categories nav item to the sidebar
   - In `apps/admin/src/components/layout/sidebar.tsx`:
     - Import `Tag` from `lucide-react` alongside existing icon imports
     - Add `{ label: 'Categories', href: '/categories', icon: Tag }` to the CONTENT section after the Articles item
   - No `adminOnly` flag — visible to all authenticated users
   - _Requirements: 3.1, 3.2, 3.3, 3.4_
 
-  - [ ]* 5.1 Write property test — Property 6: sidebar active state
+  - [ ]* 7.1 Write property test — Property 6: sidebar active state
     - **Property 6: Sidebar active state**
     - **Validates: Requirements 3.2**
     - Generate: random pathnames starting with `/categories` (e.g. `/categories`, `/categories/new`, `/categories/abc-123`)
@@ -115,55 +136,61 @@ Implement the Categories management section across three layers: API (NestJS/Pri
     - Use React Testing Library + fast-check; mock `usePathname`
     - File: `apps/admin/src/__tests__/components/sidebar-active-state.property.spec.tsx`
 
-- [x] 6. Create shared category badge components
-  - [x] 6.1 Create `apps/admin/src/components/categories/category-type-badge.tsx`
+- [x] 8. Create shared category badge components
+  - [x] 8.1 Create `apps/admin/src/components/categories/category-type-badge.tsx`
     - Coloured `Badge` variant per type: `entry` → blue, `abbreviation` → amber, `article` → green
     - Props: `type: CategoryType`
     - _Requirements: 4.2_
 
-  - [x] 6.2 Create `apps/admin/src/components/categories/category-status-badge.tsx`
+  - [x] 8.2 Create `apps/admin/src/components/categories/category-status-badge.tsx`
     - Coloured `Badge` variant per status: `draft` → slate outline, `published` → green
     - Props: `status: CategoryStatus`
     - _Requirements: 4.2_
 
-- [x] 7. Create `CategoryForm` component
-  - [x] 7.1 Implement `apps/admin/src/components/categories/category-form.tsx`
-    - Fields: Name (required text), Slug (required text), Type (required select: Entry/Abbreviation/Article), Icon (optional text), Sort Order (optional number, default 0), Cover Image URL (optional text), Status (select: Draft/Published, default Draft)
-    - Export `CategoryFormValues` type
-    - Submit button disabled when Name is empty or Type has no selection
-    - _Requirements: 6.1, 6.4_
+- [x] 9. Create `RichTextEditor` component
+  - Created `src/components/ui/rich-text-editor.tsx`
+  - TipTap-based rich text editor with toolbar: Bold, Italic, Paragraph, Heading 2, Heading 3
+  - Accepts and emits TipTap JSON (`unknown`); emits `null` for empty documents
+  - Packages installed: `@tiptap/react`, `@tiptap/pm`, `@tiptap/starter-kit`, `@tiptap/extension-heading`, `@tiptap/extension-placeholder`
+  - _Requirements: 10.1, 10.2, 10.5_
 
-  - [x] 7.2 Add slug auto-generation logic to `CategoryForm`
-    - Track `slugManuallyEdited` boolean state (false initially)
-    - On Name change: if `!slugManuallyEdited`, set slug to `toSlug(name)` using a pure `toSlug` helper (lowercase, trim, remove non-alphanumeric except spaces, replace whitespace runs with `-`)
-    - On Slug field direct edit: set `slugManuallyEdited = true`; stop auto-populating
-    - Export `toSlug` helper from the same file for property testing
-    - _Requirements: 6.2, 6.3_
+- [x] 10. Create `CategoryForm` component (tabbed, with per-locale translation management)
+  - [x] 10.1 Implement `apps/admin/src/components/categories/category-form.tsx`
+    - Language-independent top section: Type (required), Parent Category (dropdown), Status, Icon, Sort Order, Cover Image URL
+    - Tabbed per-locale section: EN / PL / FR / DE / NO tabs
+    - Each tab: Name, Slug (auto-gen), Short Description, Description (TipTap), SEO Title (≤60 with counter), SEO Description (≤160 with counter), Translation Status
+    - Export `CategoryFormValues`, `LocaleTabState`, `SupportedLocale`, `SUPPORTED_LOCALES`, `toSlug`
+    - `TranslationDialog` is NOT used — translation management is fully inline in the tabs
+    - _Requirements: 6.1, 6.2, 6.3, 7.4, 7.5, 7.6, 9.3, 9.4, 9.6, 10.1, 10.2_
 
-  - [ ]* 7.3 Write property test — Property 7: slug auto-generation
+  - [x] 10.2 Slug auto-generation logic per locale tab
+    - Track `slugManuallyEdited` boolean per locale (false initially)
+    - On Name change: if `!slugManuallyEdited`, set slug to `toSlug(name)` for that locale
+    - On Slug field direct edit: set `slugManuallyEdited = true` for that locale; stop auto-populating
+    - `toSlug` helper: lowercase, trim, remove non-alphanumeric except spaces, replace whitespace runs with `-`, strip leading/trailing hyphens
+    - _Requirements: 6.4, 6.5_
+
+  - [x] 10.3 Submit button disabled invariant
+    - Button disabled while EN Name field is empty OR Type has no selection
+    - _Requirements: 6.6_
+
+  - [ ]* 10.4 Write property test — Property 7: slug auto-generation
     - **Property 7: Slug auto-generation**
-    - **Validates: Requirements 6.2**
+    - **Validates: Requirements 6.4**
     - Generate: arbitrary non-empty strings
     - Assert: `toSlug(name)` output is lowercase, contains only `[a-z0-9-]`, does not start or end with a hyphen
     - File: `apps/admin/src/__tests__/components/slug-auto-generation.property.spec.ts`
 
-  - [ ]* 7.4 Write property test — Property 8: submit button disabled invariant
+  - [ ]* 10.5 Write property test — Property 8: submit button disabled invariant
     - **Property 8: Submit button disabled invariant**
-    - **Validates: Requirements 6.4**
-    - Generate: combinations of (empty | non-empty) Name and (selected | unselected) Type
-    - Assert: button disabled iff Name is empty OR Type is unselected
+    - **Validates: Requirements 6.6**
+    - Generate: combinations of (empty | non-empty) EN Name and (selected | unselected) Type
+    - Assert: button disabled iff EN Name is empty OR Type is unselected
     - Use React Testing Library + fast-check
     - File: `apps/admin/src/__tests__/components/category-form-submit-disabled.property.spec.tsx`
 
-- [x] 8. Create `TranslationDialog` component
-  - Create `apps/admin/src/components/categories/translation-dialog.tsx`
-  - Props: `open`, `onOpenChange`, `locale`, `initialValues?` (pre-populated for edit), `onSubmit(payload: UpsertTranslationPayload)`, `isSubmitting`
-  - Fields: Name (text), Slug (text), Translator Note (optional text), Status (select: draft/reviewed/published)
-  - On submit: call `onSubmit`; keep dialog open on error (caller handles toast)
-  - _Requirements: 7.5, 7.6, 7.7, 7.8_
-
-- [x] 9. Create the Category List page
-  - [x] 9.1 Create `apps/admin/src/app/(dashboard)/categories/page.tsx` with table and filters
+- [x] 11. Create the Category List page
+  - [x] 11.1 Create `apps/admin/src/app/(dashboard)/categories/page.tsx` with table and filters
     - Page header: "Categories" title, "+ Add Category" button (→ `/categories/new`), Export button, Import button
     - Filter bar: Search input (300 ms debounce, resets page to 1), Type select (All/Entry/Abbreviation/Article), Status select (All/Draft/Published)
     - Table columns: Name (with icon if non-null), Type (`CategoryTypeBadge`), Entry Count, Status (`CategoryStatusBadge`), Updated date, Actions menu
@@ -175,25 +202,25 @@ Implement the Categories management section across three layers: API (NestJS/Pri
     - Use `useQuery(['categories', params])` for the filtered list
     - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8, 4.9, 4.10, 4.11, 4.12, 4.15, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7_
 
-  - [x] 9.2 Add summary panel to the Category List page
+  - [x] 11.2 Add summary panel to the Category List page
     - Four stat cards: Entry count, Abbreviation count, Article count, Total
     - Separate `useQuery(['categories-summary'])` call with `limit=1000` to derive counts via a `computeSummary` helper
     - Skeleton placeholders while loading; dashes + toast error on failure
-    - _Requirements: 8.1, 8.2, 8.3, 8.4_
+    - _Requirements: 11.1, 11.2, 11.3, 11.4_
 
-  - [x] 9.3 Add Export and Import functionality to the Category List page
+  - [x] 11.3 Add Export and Import functionality to the Category List page
     - Export: fetch all categories matching current filters, build CSV string, trigger `<a download="categories.csv">` click
     - Import: hidden `<input type="file" accept=".csv">` triggered by Import button; validate file size ≤ 5 MB and `.csv` extension before sending; toast error and abort if invalid
     - _Requirements: 4.13, 4.14_
 
-  - [ ]* 9.4 Write property test — Property 11: summary counts correctness
-    - **Property 11: Summary counts correctness**
-    - **Validates: Requirements 8.1**
+  - [ ]* 11.4 Write property test — Property 12: summary counts correctness
+    - **Property 12: Summary counts correctness**
+    - **Validates: Requirements 11.1**
     - Generate: random arrays of `AdminCategory` with random type distributions
     - Assert: `computeSummary(categories)` returns counts matching the actual distribution (entry, abbreviation, article, total)
     - File: `apps/admin/src/__tests__/components/summary-counts.property.spec.ts`
 
-  - [ ]* 9.5 Write unit tests for the Category List page
+  - [ ]* 11.5 Write unit tests for the Category List page
     - Loading state renders 5 skeleton rows
     - Empty state shown when API returns zero results (not while loading)
     - Clicking a row navigates to `/categories/[id]`
@@ -202,65 +229,54 @@ Implement the Categories management section across three layers: API (NestJS/Pri
     - Summary panel shows dashes when summary fetch fails
     - File: `apps/admin/src/__tests__/pages/categories-list.spec.tsx`
 
-- [x] 10. Checkpoint — List page complete
+- [x] 12. Checkpoint — List page complete
   - Ensure all list page tests pass, ask the user if questions arise.
 
-- [x] 11. Create the Category Create page
-  - Create `apps/admin/src/app/(dashboard)/categories/new/page.tsx`
+- [x] 13. Create the Category Create page
+  - Created `apps/admin/src/app/(dashboard)/categories/new/page.tsx`
   - Back link → `/categories`; page title "New Category"
-  - Render `CategoryForm` with `submitLabel="Create Category"`
-  - On submit: call `adminCategoriesApi.createCategory`; on 2xx navigate to `/categories/[id]`
-  - On 409: set inline slug error "This slug is already taken"; keep form open
+  - Fetches parent categories (`listCategories limit=1000`); passes as prop to `CategoryForm`
+  - On submit: POST language-independent fields, then parallel `upsertTranslation` for each locale with non-empty Name
+  - On 409: toast error indicating a slug conflict; keep form open
   - On other non-2xx: toast error; keep form open
+  - On success: navigate to `/categories/[id]`
   - Cancel button → `/categories`
-  - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8_
+  - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9, 6.10, 8.1, 8.2, 8.3_
 
-  - [ ]* 11.1 Write unit test for Create page 409 handling
-    - 409 on submit shows inline slug error; form stays open
+  - [ ]* 13.1 Write unit test for Create page 409 handling
+    - 409 on submit shows toast error about slug conflict; form stays open
     - File: `apps/admin/src/__tests__/pages/categories-create.spec.tsx`
 
-- [x] 12. Create the Category Edit page
-  - [x] 12.1 Create `apps/admin/src/app/(dashboard)/categories/[id]/page.tsx` with form pre-population
+- [x] 14. Create the Category Edit page
+  - [x] 14.1 Created `apps/admin/src/app/(dashboard)/categories/[id]/page.tsx` with form pre-population
     - `useQuery(['category', id])` → `adminCategoriesApi.getCategory(id)`
     - Skeleton placeholders while loading
     - 404 response → "Category not found" message with back link to `/categories`
-    - Pre-populate `CategoryForm` with `type`, `icon`, `sort_order`, `status`, `cover_image_url`, and English translation `name`/`slug`
-    - On save: call `adminCategoriesApi.updateCategory`; on 2xx show success toast; on 409 show inline slug error; on other non-2xx show toast error
+    - Fetches parent categories (`listCategories limit=1000`); excludes self from dropdown
+    - Pre-populates all `CategoryForm` locale tabs from `category.translations` (Name, Slug, Short Description, Description, SEO Title, SEO Description, Translation Status)
+    - On save: PUT language-independent fields + parallel `upsertTranslation` for all locale tabs with non-empty Name
+    - On 409: toast error indicating slug conflict; on other non-2xx: toast error
+    - On success: toast success + `invalidateQueries(['category', id])`
     - Delete button → `ConfirmDialog` → `adminCategoriesApi.deleteCategory`; on 2xx navigate to `/categories`; on 400 show specific toast
-    - _Requirements: 7.1, 7.2, 7.3, 7.9, 7.10, 7.11, 7.12, 7.13_
+    - Separate translations table section is REMOVED — translation management is fully in the tabbed form
+    - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 7.9, 7.10, 7.11, 8.4, 8.5_
 
-  - [x] 12.2 Add Translations section to the Edit page
-    - List all existing translations (locale, name, slug, status) with Edit button per row
-    - "Add Translation" buttons for each locale not yet present (en, pl, de, no, fr)
-    - Edit click: open `TranslationDialog` pre-populated with current values
-    - Add click: open `TranslationDialog` with empty fields, status defaulting to "draft"
-    - On dialog submit: call `adminCategoriesApi.upsertTranslation`; on 2xx close dialog and `invalidateQueries(['category', id])`; on error show toast and keep dialog open
-    - _Requirements: 7.4, 7.5, 7.6, 7.7, 7.8_
-
-  - [ ]* 12.3 Write property test — Property 9: edit page pre-population
+  - [ ]* 14.2 Write property test — Property 9: edit page pre-population
     - **Property 9: Edit page pre-population**
-    - **Validates: Requirements 7.1**
-    - Generate: random `AdminCategory` objects with varied field values
-    - Assert: rendered form fields match the category's `type`, `icon`, `sort_order`, `status`, `cover_image_url`, and English translation `name`/`slug`
+    - **Validates: Requirements 7.1, 7.5**
+    - Generate: random `AdminCategory` objects with varied field values and translation arrays (0–5 locales)
+    - Assert: rendered language-independent fields match the category's `type`, `parent_id`, `icon`, `sort_order`, `status`, `cover_image_url`; each locale tab's Name, Slug, Short Description, SEO Title, SEO Description, and Translation Status match the corresponding translation, or are empty when no translation exists for that locale
     - Use React Testing Library + fast-check; mock `adminCategoriesApi.getCategory`
     - File: `apps/admin/src/__tests__/pages/categories-edit-prepopulation.property.spec.tsx`
 
-  - [ ]* 12.4 Write property test — Property 10: translations list completeness
-    - **Property 10: Translations list completeness**
-    - **Validates: Requirements 7.4**
-    - Generate: random arrays of `AdminCategoryTranslation` (0–10 items)
-    - Assert: rendered translation rows count equals array length; each row shows correct `locale`, `name`, `slug`, `status`
-    - Use React Testing Library + fast-check
-    - File: `apps/admin/src/__tests__/pages/categories-translations-completeness.property.spec.tsx`
-
-  - [ ]* 12.5 Write unit tests for the Edit page
+  - [ ]* 14.3 Write unit tests for the Edit page
     - 404 on load shows "Category not found" with back link
-    - Translation dialog opens pre-populated on Edit click
-    - Translation dialog opens empty on Add click
+    - All locale tabs pre-populated when translations exist
+    - Locale tab shows empty fields when no translation exists for that locale
     - 400 on delete shows specific toast
     - File: `apps/admin/src/__tests__/pages/categories-edit.spec.tsx`
 
-- [x] 13. Final checkpoint — Ensure all tests pass
+- [x] 15. Final checkpoint — Ensure all tests pass
   - Ensure all tests pass across API and frontend layers, ask the user if questions arise.
 
 ---
@@ -270,10 +286,10 @@ Implement the Categories management section across three layers: API (NestJS/Pri
 - Tasks marked with `*` are optional and can be skipped for a faster MVP
 - Each task references specific requirements for traceability
 - Property tests use [fast-check](https://fast-check.io/) and run ≥100 iterations
-- The `toSlug` helper and `computeSummary` function should be pure, exported utilities to make property testing straightforward
+- The `toSlug` helper and `computeSummary` function are pure, exported utilities to make property testing straightforward
 - The existing `categoriesApi` export in `categories.ts` must remain untouched for backward compatibility
-- The Prisma migration must be run before any API tests that touch the database
-- Integration tests (controller-level with `supertest`) are covered by the existing `admin-category.service.spec.ts` extension in task 2.4
+- The Prisma migration for SEO fields (task 3) must be run before any API tests that touch translations
+- `TranslationDialog` is deprecated and removed — translation management is handled entirely through the tabbed `CategoryForm`
 
 ## Task Dependency Graph
 
@@ -283,16 +299,17 @@ Implement the Categories management section across three layers: API (NestJS/Pri
     { "id": 0, "tasks": ["1"] },
     { "id": 1, "tasks": ["2.1"] },
     { "id": 2, "tasks": ["2.2", "2.3"] },
-    { "id": 3, "tasks": ["2.4", "2.5", "2.6", "4.1"] },
-    { "id": 4, "tasks": ["4.2"] },
-    { "id": 5, "tasks": ["4.3", "4.4", "4.5", "5", "6.1", "6.2"] },
-    { "id": 6, "tasks": ["5.1", "7.1"] },
-    { "id": 7, "tasks": ["7.2", "8"] },
-    { "id": 8, "tasks": ["7.3", "7.4", "9.1"] },
-    { "id": 9, "tasks": ["9.2", "9.3", "11"] },
-    { "id": 10, "tasks": ["9.4", "9.5", "11.1", "12.1"] },
-    { "id": 11, "tasks": ["12.2"] },
-    { "id": 12, "tasks": ["12.3", "12.4", "12.5"] }
+    { "id": 3, "tasks": ["2.4", "2.5", "2.6", "3"] },
+    { "id": 4, "tasks": ["4", "6.1"] },
+    { "id": 5, "tasks": ["4.1", "6.2"] },
+    { "id": 6, "tasks": ["6.3", "6.4", "6.5", "7", "8.1", "8.2"] },
+    { "id": 7, "tasks": ["7.1", "9"] },
+    { "id": 8, "tasks": ["10.1"] },
+    { "id": 9, "tasks": ["10.2", "10.3", "11.1"] },
+    { "id": 10, "tasks": ["10.4", "10.5", "11.2", "11.3"] },
+    { "id": 11, "tasks": ["11.4", "11.5", "13"] },
+    { "id": 12, "tasks": ["13.1", "14.1"] },
+    { "id": 13, "tasks": ["14.2", "14.3"] }
   ]
 }
 ```

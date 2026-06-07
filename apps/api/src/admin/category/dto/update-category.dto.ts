@@ -37,4 +37,13 @@ export class UpdateCategoryDto {
   @IsOptional()
   @IsString()
   cover_image_url?: string | null;
+
+  @ApiPropertyOptional({
+    example: '#a78bfa',
+    description: 'Accent color hex for UI badges and category cards.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(9)
+  color?: string;
 }

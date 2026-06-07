@@ -165,6 +165,8 @@ model Category {
   entry_count     Int            @default(0)
   /// Optional CDN URL (Cloudflare R2) for richer category landing pages
   cover_image_url String?
+  /// Accent color hex — used in UI badges and category cards. Randomly assigned on creation.
+  color           String?
   /// Open-ended language-independent properties. GIN-indexed.
   metadata        Json           @default("{}")
   created_at      DateTime       @default(now()) @db.Timestamptz
@@ -188,20 +190,26 @@ model Category {
 // ---------------------------------------------------------------------------
 
 model CategoryTranslation {
-  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  category_id     String            @db.Uuid
+  id                String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  category_id       String            @db.Uuid
   /// BCP-47 locale code: en, pl, de, no, fr
-  locale          String
+  locale            String
   /// Locale-specific public URL slug, e.g. "sciegi" (pl), "stitches" (en)
-  slug            String
+  slug              String
   /// Display name in this locale
-  name            String
+  name              String
   /// TipTap JSON — editorial introduction. Same node schema as the definition content block. Nullable.
-  description     Json?
-  status          TranslationStatus @default(draft)
-  translator_note String?
-  created_at      DateTime          @default(now()) @db.Timestamptz
-  updated_at      DateTime          @updatedAt @db.Timestamptz
+  description       Json?
+  /// Plain-text one-line summary for the category — shown in cards and previews. Nullable.
+  short_description String?
+  /// Locale-specific <title> override for the category page (≤60 chars). Falls back to name. Nullable.
+  seo_title         String?
+  /// Locale-specific meta description for the category page (≤160 chars). Nullable.
+  seo_description   String?
+  status            TranslationStatus @default(draft)
+  translator_note   String?
+  created_at        DateTime          @default(now()) @db.Timestamptz
+  updated_at        DateTime          @updatedAt @db.Timestamptz
 
   category Category @relation(fields: [category_id], references: [id], onDelete: Cascade)
 

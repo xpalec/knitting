@@ -6,7 +6,6 @@ import { useState } from 'react';
 import {
   LayoutDashboard,
   BookOpen,
-  InboxIcon,
   FileText,
   Image,
   Settings,
@@ -15,6 +14,11 @@ import {
   ChevronRight,
   Tag,
   Tags,
+  Video,
+  Calendar,
+  Map,
+  CaseSensitive,
+  Layers,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth';
@@ -34,27 +38,42 @@ interface NavItem {
 
 const NAV_SECTIONS: Array<{ label: string; items: NavItem[] }> = [
   {
-    label: 'CONTENT',
+    label: 'ENCYCLOPEDIA',
     items: [
-      { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
       { label: 'Entries', href: '/entries', icon: BookOpen },
-      { label: 'Queue', href: '/queue', icon: InboxIcon },
-      { label: 'Articles', href: '/articles', icon: FileText },
+      { label: 'Entry templates', href: '/entry-templates', icon: Layers },
+      { label: 'Abbreviations', href: '/abbreviations', icon: CaseSensitive },
       { label: 'Categories', href: '/categories', icon: Tag },
       { label: 'Tags', href: '/tags', icon: Tags },
     ],
   },
   {
-    label: 'MEDIA',
+    label: 'CONTENT',
     items: [
-      { label: 'Media Library', href: '/media', icon: Image },
+      { label: 'Articles', href: '/articles', icon: FileText },
+      { label: 'Video', href: '/video', icon: Video },
+      { label: 'Categories', href: '/content-categories', icon: Tag },
+      { label: 'Tags', href: '/content-tags', icon: Tags },
     ],
   },
   {
-    label: 'SETTINGS',
+    label: 'OTHER',
     items: [
-      { label: 'Block Templates', href: '/settings/templates', icon: Settings, adminOnly: true },
+      { label: 'Calendar', href: '/calendar', icon: Calendar },
+      { label: 'Map', href: '/map', icon: Map },
+    ],
+  },
+  {
+    label: 'MEDIA',
+    items: [
+      { label: 'Media library', href: '/media', icon: Image },
+    ],
+  },
+  {
+    label: 'SYSTEM',
+    items: [
       { label: 'Users', href: '/users', icon: Users, adminOnly: true },
+      { label: 'Settings', href: '/settings', icon: Settings, adminOnly: true },
     ],
   },
 ];
@@ -75,16 +94,53 @@ export function Sidebar() {
       >
         {/* Logo */}
         <div className={cn('flex items-center gap-3 px-4 py-5 border-b border-slate-100', collapsed && 'justify-center px-0')}>
-          <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
+          <div className="w-8 h-8 rounded-lg bg-violet-600 flex items-center justify-center shrink-0">
             <span className="text-white text-sm font-bold">K</span>
           </div>
           {!collapsed && (
-            <span className="font-semibold text-slate-800 text-sm">Knitting Admin</span>
+            <span className="font-semibold text-slate-800 text-sm">Knitovia</span>
           )}
         </div>
 
+        {/* Dashboard link (standalone, above sections) */}
+        <div className="px-2 pt-4 pb-2">
+          {(() => {
+            const isActive = pathname === '/dashboard';
+            const linkContent = (
+              <Link
+                href="/dashboard"
+                className={cn(
+                  'flex items-center gap-3 rounded-lg px-2 py-2 text-sm font-medium transition-colors',
+                  isActive
+                    ? 'bg-violet-50 text-violet-700'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                  collapsed && 'justify-center px-0 w-10 h-10 mx-auto',
+                )}
+                aria-current={isActive ? 'page' : undefined}
+              >
+                <LayoutDashboard
+                  className={cn('shrink-0', isActive ? 'text-violet-600' : 'text-slate-400')}
+                  size={18}
+                  aria-hidden="true"
+                />
+                {!collapsed && 'Dashboard'}
+              </Link>
+            );
+
+            if (collapsed) {
+              return (
+                <Tooltip>
+                  <TooltipTrigger asChild>{linkContent}</TooltipTrigger>
+                  <TooltipContent side="right">Dashboard</TooltipContent>
+                </Tooltip>
+              );
+            }
+            return linkContent;
+          })()}
+        </div>
+
         {/* Nav sections */}
-        <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-6">
+        <nav className="flex-1 overflow-y-auto py-2 px-2 space-y-5">
           {NAV_SECTIONS.map((section) => {
             const visibleItems = section.items.filter(
               (item) => !item.adminOnly || isAdmin,
@@ -100,10 +156,7 @@ export function Sidebar() {
                 )}
                 <ul className="space-y-0.5">
                   {visibleItems.map((item) => {
-                    const isActive =
-                      item.href === '/dashboard'
-                        ? pathname === '/dashboard'
-                        : pathname.startsWith(item.href);
+                    const isActive = pathname.startsWith(item.href);
                     const Icon = item.icon;
 
                     const linkContent = (
@@ -112,14 +165,14 @@ export function Sidebar() {
                         className={cn(
                           'flex items-center gap-3 rounded-lg px-2 py-2 text-sm font-medium transition-colors',
                           isActive
-                            ? 'bg-blue-50 text-blue-700'
+                            ? 'bg-violet-50 text-violet-700'
                             : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                           collapsed && 'justify-center px-0 w-10 h-10 mx-auto',
                         )}
                         aria-current={isActive ? 'page' : undefined}
                       >
                         <Icon
-                          className={cn('shrink-0', isActive ? 'text-blue-600' : 'text-slate-400')}
+                          className={cn('shrink-0', isActive ? 'text-violet-600' : 'text-slate-400')}
                           size={18}
                           aria-hidden="true"
                         />

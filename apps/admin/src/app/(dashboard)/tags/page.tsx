@@ -10,8 +10,6 @@ import {
   MoreHorizontal,
   Pencil,
   Trash2,
-  ChevronLeft,
-  ChevronRight,
   FileX,
   Tag,
   Layers,
@@ -26,6 +24,8 @@ import type { AdminTag, AdminTagListParams, TagType } from '@/lib/api/tags';
 import { ApiError } from '@/lib/api/client';
 
 import { TagTypeBadge } from '@/components/tags/tag-type-badge';
+import { PageHeader } from '@/components/layout/page-header';
+import { Pagination } from '@/components/ui/pagination';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -85,7 +85,7 @@ export function computeTagSummary(tags: AdminTag[]): TagSummary {
 // Constants
 // ---------------------------------------------------------------------------
 
-const PAGE_SIZE = 20;
+const DEFAULT_PAGE_SIZE = 10;
 
 const TYPE_OPTIONS: { value: TagType | 'all'; label: string }[] = [
   { value: 'all',             label: 'All Types' },
@@ -142,6 +142,7 @@ export default function TagsPage() {
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<TagType | 'all'>('all');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
   // Dialog state
   const [deleteTarget, setDeleteTarget] = useState<AdminTag | null>(null);
@@ -163,7 +164,7 @@ export default function TagsPage() {
   // Build query params
   const params: AdminTagListParams = {
     page,
-    limit: PAGE_SIZE,
+    limit: pageSize,
     ...(search ? { search } : {}),
     ...(typeFilter !== 'all' ? { type: typeFilter } : {}),
   };
@@ -175,7 +176,7 @@ export default function TagsPage() {
 
   const tags = data?.data ?? [];
   const total = data?.meta?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   // Summary query — independent of filters, always fetches all tags
   const {
@@ -219,30 +220,24 @@ export default function TagsPage() {
   return (
     <div className="space-y-6">
       {/* Page header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-slate-800">Tags</h1>
-        <Button asChild>
+      <PageHeader
+        title="Tags"
+        description="Manage tags for filtering and organizing entries"
+      >
+        <Button
+          variant="outline"
+          className="gap-2 border-violet-500 text-violet-600 hover:bg-violet-50 hover:text-violet-700"
+        >
+          <Search size={16} aria-hidden="true" />
+          Filters
+        </Button>
+        <Button asChild className="gap-2 bg-violet-600 hover:bg-violet-700 text-white">
           <Link href="/tags/new">
             <Plus size={16} aria-hidden="true" />
-            Add Tag
+            Add
           </Link>
         </Button>
-      </div>
-
-      {/* Total count */}
-      <div className="flex items-center gap-2 text-sm text-slate-600">
-        <div className="rounded-lg bg-slate-50 p-2 text-blue-600">
-          <Tag size={18} aria-hidden="true" />
-        </div>
-        {isLoading ? (
-          <Skeleton className="h-4 w-32" />
-        ) : (
-          <span>
-            <span className="font-semibold text-slate-800">{total}</span>{' '}
-            {total === 1 ? 'Tag' : 'Tags'} total
-          </span>
-        )}
-      </div>
+      </PageHeader>
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
@@ -268,7 +263,7 @@ export default function TagsPage() {
         {/* Needle Type */}
         <Card>
           <CardContent className="flex items-center gap-3 p-4">
-            <div className="rounded-lg bg-blue-50 p-2 text-blue-600">
+            <div className="rounded-lg bg-violet-50 p-2 text-violet-600">
               <Tag size={18} aria-hidden="true" />
             </div>
             <div>
@@ -485,32 +480,14 @@ export default function TagsPage() {
       </Card>
 
       {/* Pagination */}
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-slate-500">
-          Page <span className="font-medium text-slate-700">{page}</span> of{' '}
-          <span className="font-medium text-slate-700">{totalPages}</span>
-        </p>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page <= 1}
-          >
-            <ChevronLeft size={16} aria-hidden="true" />
-            Prev
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page >= totalPages}
-          >
-            Next
-            <ChevronRight size={16} aria-hidden="true" />
-          </Button>
-        </div>
-      </div>
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        total={total}
+        pageSize={pageSize}
+        onPageChange={setPage}
+        onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
+      />
 
       {/* Delete confirm dialog */}
       <ConfirmDialog

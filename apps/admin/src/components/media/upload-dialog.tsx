@@ -112,7 +112,7 @@ export function UploadDialog({ open, onOpenChange, onUploaded }: UploadDialogPro
           className={cn(
             'flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed p-10 text-center transition-colors cursor-pointer',
             isDragging
-              ? 'border-blue-500 bg-blue-50'
+              ? 'border-violet-500 bg-violet-50'
               : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50',
           )}
           onDragOver={handleDragOver}
@@ -126,7 +126,7 @@ export function UploadDialog({ open, onOpenChange, onUploaded }: UploadDialogPro
           <Upload size={28} className="text-slate-400" aria-hidden="true" />
           <div>
             <p className="text-sm font-medium text-slate-700">
-              Drop files here or <span className="text-blue-600">browse</span>
+              Drop files here or <span className="text-violet-600">browse</span>
             </p>
             <p className="text-xs text-slate-400 mt-1">Images and videos supported</p>
           </div>

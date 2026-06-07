@@ -10,15 +10,17 @@ import {
   ExternalLink,
   Trash2,
   ImageOff,
-  ChevronLeft,
-  ChevronRight,
   Film,
   LayoutGrid,
+  Search,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { mediaApi } from '@/lib/api/media';
 import type { MediaAsset, MediaType } from '@/lib/api/media';
+
+import { PageHeader } from '@/components/layout/page-header';
+import { Pagination } from '@/components/ui/pagination';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -188,12 +190,13 @@ export default function MediaPage() {
 
   const [typeFilter, setTypeFilter] = useState<'all' | MediaType>('all');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<MediaAsset | null>(null);
 
   const params = {
     page,
-    limit: PAGE_SIZE,
+    limit: pageSize,
     ...(typeFilter !== 'all' ? { type: typeFilter } : {}),
   };
 
@@ -204,7 +207,7 @@ export default function MediaPage() {
 
   const assets = data?.data ?? [];
   const total = data?.meta?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => mediaApi.deleteMedia(id),
@@ -230,17 +233,26 @@ export default function MediaPage() {
   return (
     <div className="space-y-6">
       {/* Page header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-slate-800">Media Library</h1>
-        <Button onClick={() => setUploadOpen(true)}>
+      <PageHeader
+        title="Media Library"
+        description="Upload and manage images, diagrams and video assets"
+      >
+        <Button
+          variant="outline"
+          className="gap-2 border-violet-500 text-violet-600 hover:bg-violet-50 hover:text-violet-700"
+        >
+          <Search size={16} aria-hidden="true" />
+          Filters
+        </Button>
+        <Button onClick={() => setUploadOpen(true)} className="gap-2 bg-violet-600 hover:bg-violet-700 text-white">
           <Upload size={16} aria-hidden="true" />
           Upload
         </Button>
-      </div>
+      </PageHeader>
 
       {/* Stats row */}
       <div className="flex items-center gap-2 text-sm text-slate-600">
-        <div className="rounded-lg bg-slate-50 p-2 text-blue-600">
+        <div className="rounded-lg bg-violet-50 p-2 text-violet-600">
           <LayoutGrid size={18} aria-hidden="true" />
         </div>
         {isLoading ? (
@@ -310,32 +322,14 @@ export default function MediaPage() {
 
       {/* Pagination */}
       {!isLoading && assets.length > 0 && (
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-slate-500">
-            Page <span className="font-medium text-slate-700">{page}</span> of{' '}
-            <span className="font-medium text-slate-700">{totalPages}</span>
-          </p>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page <= 1}
-            >
-              <ChevronLeft size={16} aria-hidden="true" />
-              Prev
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page >= totalPages}
-            >
-              Next
-              <ChevronRight size={16} aria-hidden="true" />
-            </Button>
-          </div>
-        </div>
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          total={total}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
+        />
       )}
 
       {/* Upload dialog */}

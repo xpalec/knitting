@@ -2,7 +2,7 @@
 
 ## Introduction
 
-The admin-categories feature adds a Categories management section to the Knitpedia admin app. It allows editors and admins to create, view, edit, and delete categories used to organise dictionary entries, abbreviations, and articles. Categories are flat (no parent/child hierarchy). Each category has a type (Entry, Abbreviation, Article) that determines which content it can be assigned to. Categories support multilingual translations and a publish/draft status workflow.
+The admin-categories feature adds a Categories management section to the Knitpedia admin app. It allows editors and admins to create, view, edit, and delete categories used to organise dictionary entries, abbreviations, and articles. Categories are hierarchical — each category optionally belongs to a parent category via `parent_id` (self-join); top-level categories have `parent_id = null`. Each category has a type (Entry, Abbreviation, Article) that determines which content it can be assigned to. Categories support multilingual translations and a publish/draft status workflow.
 
 The feature spans three layers:
 - **API**: Add a `type` field to the Category model and expose it through the admin endpoints.
@@ -16,11 +16,14 @@ The feature spans three layers:
 - **Category_List_Page**: The `/categories` admin page that displays all categories in a paginated table.
 - **Category_Form_Page**: The `/categories/new` and `/categories/[id]` pages used to create or edit a category.
 - **Admin_API**: The NestJS backend at `GET|POST|PUT|DELETE /api/v1/admin/categories`.
-- **Category**: A flat taxonomy node with a type, status, icon, sort order, cover image, entry count, and multilingual translations.
+- **Category**: A hierarchical taxonomy node with a type, optional parent, status, icon, sort order, cover image, entry count, and multilingual translations. `Category` has no `name` or `slug` columns — those live exclusively in `CategoryTranslation`.
 - **Category_Type**: One of three values — `entry`, `abbreviation`, or `article` — indicating which content the category organises.
-- **Translation**: A locale-specific record containing `name`, `slug`, `description`, and `status` for a category.
-- **Status**: Either `draft` (not publicly visible) or `published` (publicly visible).
+- **CategoryTranslation**: A locale-specific record containing `name`, `slug`, `short_description`, `description` (TipTap JSON), `seo_title`, `seo_description`, `translator_note`, and `status` for a category. One row per locale per category.
+- **Translation_Status**: One of three values — `draft`, `reviewed`, or `published` — indicating the editorial state of a single locale's translation.
+- **Status**: The category-level publication status. Either `draft` (not publicly visible) or `published` (publicly visible).
 - **Admin_Categories_API_Client**: The `adminCategoriesApi` object in `apps/admin/src/lib/api/categories.ts` that wraps all admin category HTTP calls.
+- **TipTap_JSON**: A JSON document conforming to the TipTap ProseMirror node schema used for the `description` field in `CategoryTranslation`.
+- **Supported_Locales**: The five locales supported for category translations: `en` (English), `pl` (Polish), `fr` (Français), `de` (Deutsch), `no` (Norwegian).
 
 ---
 
@@ -52,8 +55,9 @@ The feature spans three layers:
 4. THE Admin_Categories_API_Client SHALL expose an `updateCategory(id: string, dto: UpdateCategoryPayload)` function that calls `PUT /api/v1/admin/categories/:id` using `apiPut` and returns `Promise<AdminCategory>`.
 5. THE Admin_Categories_API_Client SHALL expose a `deleteCategory(id: string)` function that calls `DELETE /api/v1/admin/categories/:id` using `apiDelete` and returns `Promise<void>`.
 6. THE Admin_Categories_API_Client SHALL expose an `upsertTranslation(id: string, locale: string, dto: UpsertTranslationPayload)` function that calls `PUT /api/v1/admin/categories/:id/translations/:locale` using `apiPut` and returns `Promise<AdminCategoryTranslation>`.
-7. THE Admin_Categories_API_Client SHALL export TypeScript interfaces `AdminCategory` (with fields `id`, `type`, `icon`, `sort_order`, `status`, `entry_count`, `cover_image_url`, `translations`, `children_count`, `created_at`, `updated_at`), `AdminCategoryListParams` (with optional `page`, `limit`, `search`, `type`, `status`), `CreateCategoryPayload`, `UpdateCategoryPayload`, and `UpsertTranslationPayload` that match the API contract.
-8. IF any Admin_Categories_API_Client function receives a non-2xx HTTP response, THEN it SHALL propagate the error thrown by the underlying `apiGet`/`apiPost`/`apiPut`/`apiDelete` helper so that callers can catch and handle it.
+7. THE Admin_Categories_API_Client SHALL export TypeScript interfaces `AdminCategory` (with fields `id`, `type`, `parent_id`, `icon`, `sort_order`, `status`, `entry_count`, `cover_image_url`, `translations`, `children_count`, `created_at`, `updated_at`), `AdminCategoryTranslation` (with fields `locale`, `name`, `slug`, `short_description`, `description`, `seo_title`, `seo_description`, `translator_note`, `status`), `AdminCategoryListParams`, `CreateCategoryPayload`, `UpdateCategoryPayload`, and `UpsertTranslationPayload` that match the API contract.
+8. THE `CreateCategoryPayload` interface SHALL NOT include `name_en` or `slug_en` fields. WHEN creating a category, THE Admin_Categories_API_Client SHALL send only the language-independent fields (`type`, `parent_id`, `icon`, `sort_order`, `cover_image_url`, `status`) in the `POST /api/v1/admin/categories` request; translations SHALL be created separately via `upsertTranslation`.
+9. IF any Admin_Categories_API_Client function receives a non-2xx HTTP response, THEN it SHALL propagate the error thrown by the underlying `apiGet`/`apiPost`/`apiPut`/`apiDelete` helper so that callers can catch and handle it.
 
 ---
 
@@ -116,40 +120,84 @@ The feature spans three layers:
 
 #### Acceptance Criteria
 
-1. WHEN an editor navigates to `/categories/new`, THE Category_Form_Page SHALL display a form with the following fields: Name (required text, English), Slug (required text, English), Type (required select: Entry / Abbreviation / Article), Icon (optional text), Sort Order (optional number, default 0), Cover Image URL (optional text), and Status (select: Draft / Published, default Draft).
-2. WHEN the Name field value changes and the editor has not manually edited the Slug field, THE Category_Form_Page SHALL update the Slug field to the lowercase kebab-case equivalent of the Name value (e.g. "Basic Stitches" → "basic-stitches").
-3. WHEN the editor manually edits the Slug field, THE Category_Form_Page SHALL stop auto-populating the Slug field from the Name for the remainder of the session on that page.
-4. THE Category_Form_Page SHALL keep the submit button disabled while the Name field is empty or the Type field has no selection.
-5. WHEN an editor submits the form with valid data, THE Category_Form_Page SHALL call `POST /api/v1/admin/categories` and, on a 2xx response, navigate to `/categories/[id]` for the newly created category.
-6. IF the create API call returns HTTP 409, THEN THE Category_Form_Page SHALL display an inline validation error on the Slug field (e.g. "This slug is already taken") and keep the form open.
-7. IF the create API call returns any non-2xx status other than HTTP 409, THEN THE Category_Form_Page SHALL display a toast error message and keep the form open.
-8. THE Category_Form_Page SHALL display a "Cancel" button that navigates back to `/categories` without submitting the form.
+1. WHEN an editor navigates to `/categories/new`, THE Category_Form_Page SHALL display a form with two sections: a language-independent section and a tabbed per-language translation section.
+2. THE language-independent section SHALL contain the following fields: Type (required select: Entry / Abbreviation / Article), Parent Category (optional select populated from all existing categories, with a "None — top-level category" option), Icon (optional text), Sort Order (optional number, default 0), Cover Image URL (optional text), and Status (select: Draft / Published, default Draft).
+3. THE tabbed per-language translation section SHALL display one tab per Supported_Locale (`en`, `pl`, `fr`, `de`, `no`), with each tab containing the following fields for that locale: Name (required text), Slug (auto-generated from Name, editable), Short Description (optional plain text, single-line), Description (optional TipTap rich-text editor), SEO Title (optional text, ≤60 chars), SEO Description (optional text, ≤160 chars), and Translation Status (select: Draft / Reviewed / Published, default Draft).
+4. WHEN the Name field value changes within a language tab and the editor has not manually edited the Slug field for that locale, THE Category_Form_Page SHALL update the Slug field for that locale to the lowercase kebab-case equivalent of the Name value (e.g. "Basic Stitches" → "basic-stitches").
+5. WHEN the editor manually edits a Slug field within any language tab, THE Category_Form_Page SHALL stop auto-populating that locale's Slug field from the Name for the remainder of the session on that page.
+6. THE Category_Form_Page SHALL keep the submit button disabled while the English (EN) Name field is empty or the Type field has no selection.
+7. WHEN an editor submits the form, THE Category_Form_Page SHALL call `POST /api/v1/admin/categories` with only the language-independent fields; on a 2xx response it SHALL call `PUT /api/v1/admin/categories/:id/translations/:locale` for each locale tab that has a non-empty Name field; on completion it SHALL navigate to `/categories/[id]` for the newly created category.
+8. IF any create or translation API call returns HTTP 409, THEN THE Category_Form_Page SHALL display an inline validation error on the Slug field of the affected locale tab (e.g. "This slug is already taken") and keep the form open.
+9. IF any create or translation API call returns any non-2xx status other than HTTP 409, THEN THE Category_Form_Page SHALL display a toast error message and keep the form open.
+10. THE Category_Form_Page SHALL display a "Cancel" button that navigates back to `/categories` without submitting the form.
 
 ---
 
 ### Requirement 7: Edit Category Page
 
-**User Story:** As an editor, I want to edit an existing category's fields and manage its translations, so that I can keep category data accurate and multilingual.
+**User Story:** As an editor, I want to edit an existing category's fields and manage its translations inline on the same page, so that I can keep category data accurate and multilingual without navigating away.
 
 #### Acceptance Criteria
 
-1. WHEN an editor navigates to `/categories/[id]`, THE Category_Form_Page SHALL call `GET /api/v1/admin/categories/:id` and pre-populate all form fields (Name, Slug of the English translation, Type, Icon, Sort Order, Cover Image URL, Status) with the returned values.
+1. WHEN an editor navigates to `/categories/[id]`, THE Category_Form_Page SHALL call `GET /api/v1/admin/categories/:id` and pre-populate all form fields — language-independent fields (Type, Parent Category, Icon, Sort Order, Cover Image URL, Status) and per-locale translation fields (Name, Slug, Short Description, Description, SEO Title, SEO Description, Translation Status) for each Supported_Locale tab.
 2. WHILE the category data is loading, THE Category_Form_Page SHALL display skeleton placeholders for each form field.
 3. IF `GET /api/v1/admin/categories/:id` returns HTTP 404, THEN THE Category_Form_Page SHALL display a "Category not found" message and a link that navigates back to `/categories`.
-4. WHEN the category data has loaded, THE Category_Form_Page SHALL display a Translations section listing all existing translations, each showing locale, name, slug, and status.
-5. WHEN an editor clicks "Edit" on an existing translation row, THE Category_Form_Page SHALL open a dialog pre-populated with that translation's current name, slug, description, and status.
-6. WHEN an editor clicks "Add Translation" for a locale that has no existing translation, THE Category_Form_Page SHALL open a dialog with empty name, slug, description fields and status defaulting to "draft".
-7. WHEN an editor submits a translation dialog, THE Category_Form_Page SHALL call `PUT /api/v1/admin/categories/:id/translations/:locale`; on a 2xx response it SHALL close the dialog and refresh the translation list.
-8. IF a translation dialog submit returns a non-2xx response, THEN THE Category_Form_Page SHALL display a toast error message and keep the dialog open.
-9. WHEN an editor submits the main category form, THE Category_Form_Page SHALL call `PUT /api/v1/admin/categories/:id`; on a 2xx response it SHALL display a success toast.
-10. IF `PUT /api/v1/admin/categories/:id` returns HTTP 409, THEN THE Category_Form_Page SHALL display an inline validation error on the Slug field.
-11. IF `PUT /api/v1/admin/categories/:id` returns any non-2xx status other than HTTP 409, THEN THE Category_Form_Page SHALL display a toast error message.
-12. THE Category_Form_Page SHALL display a "Delete Category" button; WHEN clicked it SHALL show a confirmation dialog; WHEN confirmed it SHALL call `DELETE /api/v1/admin/categories/:id`; on a 2xx response it SHALL navigate back to `/categories`.
-13. IF the delete call from the edit page returns HTTP 400, THEN THE Category_Form_Page SHALL display a toast error message indicating the category cannot be deleted while it has entries assigned.
+4. THE Category_Form_Page SHALL display the per-language translation fields as tabs labelled by locale (e.g. "EN English", "PL Polish", "FR Français", "DE Deutsch", "NO Norwegian"); each tab SHALL show the translation fields for that locale.
+5. WHEN the category data has loaded, THE Category_Form_Page SHALL pre-populate each locale tab with the corresponding `CategoryTranslation` data if it exists, or show empty fields if no translation exists yet for that locale.
+6. THE Category_Form_Page SHALL render the `description` field in each locale tab using a TipTap rich-text editor component, not a plain textarea; the editor SHALL accept and produce TipTap_JSON.
+7. WHEN an editor submits the main category form, THE Category_Form_Page SHALL call `PUT /api/v1/admin/categories/:id` with the language-independent fields and `PUT /api/v1/admin/categories/:id/translations/:locale` for each locale tab whose Name field is non-empty; on successful completion it SHALL display a success toast and invalidate the cached category data.
+8. IF `PUT /api/v1/admin/categories/:id` returns HTTP 409 for a slug conflict on any locale, THEN THE Category_Form_Page SHALL display an inline validation error on the Slug field of the affected locale tab and keep the form open.
+9. IF `PUT /api/v1/admin/categories/:id` or any translation upsert returns any non-2xx status other than HTTP 409, THEN THE Category_Form_Page SHALL display a toast error message.
+10. THE Category_Form_Page SHALL display a "Delete Category" button; WHEN clicked it SHALL show a confirmation dialog containing the category name; WHEN confirmed it SHALL call `DELETE /api/v1/admin/categories/:id`; on a 2xx response it SHALL navigate back to `/categories`.
+11. IF the delete call from the edit page returns HTTP 400, THEN THE Category_Form_Page SHALL display a toast error message indicating the category cannot be deleted while it has entries assigned.
 
 ---
 
-### Requirement 8: Category Overview Summary
+### Requirement 8: Parent Category Selector
+
+**User Story:** As an editor, I want to assign a parent category when creating or editing a category, so that I can build a hierarchical taxonomy with subcategories.
+
+#### Acceptance Criteria
+
+1. THE Category_Form_Page SHALL display a Parent Category select field in the language-independent section, populated by fetching all existing categories from `GET /api/v1/admin/categories`.
+2. THE Parent Category select field SHALL include a "None — top-level category" option that sets `parent_id` to `null`.
+3. WHEN an editor selects a parent category, THE Category_Form_Page SHALL set `parent_id` to the selected category's `id` in the create or update payload.
+4. WHEN editing an existing category, THE Category_Form_Page SHALL pre-select the category's current `parent_id` value in the Parent Category select field; WHEN `parent_id` is `null`, THE Category_Form_Page SHALL display "None — top-level category" as the selected option.
+5. THE Parent Category select SHALL display each option as the category's English name (from its `en` translation), with a fallback to the category `id` if no English translation exists.
+6. IF fetching the parent category list fails, THEN THE Category_Form_Page SHALL display a toast error and render the Parent Category field in a disabled state.
+
+---
+
+### Requirement 9: CategoryTranslation SEO and Short Description Fields
+
+**User Story:** As an editor, I want SEO title, SEO description, and a short description for each category translation, so that I can optimise category pages for search engines and provide concise summaries.
+
+#### Acceptance Criteria
+
+1. THE Admin_API SHALL include `seo_title` (string or null, ≤60 chars), `seo_description` (string or null, ≤160 chars), and `short_description` (string or null) fields in every `CategoryTranslation` object returned by `GET /api/v1/admin/categories/:id` and translation upsert responses.
+2. THE `UpsertTranslationPayload` interface SHALL include optional `seo_title` (string, ≤60 chars), `seo_description` (string, ≤160 chars), and `short_description` (string) fields.
+3. WHEN an editor enters more than 60 characters in the SEO Title field of a locale tab, THE Category_Form_Page SHALL display an inline character count indicator showing the number of characters remaining (e.g. "58/60").
+4. WHEN an editor enters more than 160 characters in the SEO Description field of a locale tab, THE Category_Form_Page SHALL display an inline character count indicator showing the number of characters remaining (e.g. "145/160").
+5. IF a `PUT /api/v1/admin/categories/:id/translations/:locale` request includes a `seo_title` value exceeding 60 characters or a `seo_description` value exceeding 160 characters, THEN THE Admin_API SHALL return HTTP 400 with a validation error, without persisting the translation.
+6. THE Category_Form_Page SHALL display the Short Description field as a single-line plain text input (not a rich-text editor), distinct from the TipTap Description field.
+
+---
+
+### Requirement 10: TipTap Description Editor
+
+**User Story:** As an editor, I want a rich-text editor for the description field in each translation tab, so that I can write formatted category introductions with headings, bold text, and links.
+
+#### Acceptance Criteria
+
+1. THE Category_Form_Page SHALL render the Description field in each locale tab using a TipTap editor component that supports the permitted node types: `paragraph`, `heading` (h2, h3), `bold` (mark), `italic` (mark), `hard_break`, and `entry_link` (custom inline node linking to an entry by UUID).
+2. WHEN an editor types in the TipTap editor, THE Category_Form_Page SHALL store the editor content as TipTap_JSON in the component state and include it as the `description` field value when submitting the translation payload.
+3. WHEN the category data has loaded on the edit page and a locale's `CategoryTranslation.description` is non-null, THE Category_Form_Page SHALL initialise the TipTap editor for that locale with the stored TipTap_JSON content.
+4. WHEN a locale's `CategoryTranslation.description` is `null` or the translation does not exist, THE Category_Form_Page SHALL initialise the TipTap editor for that locale as an empty document.
+5. THE TipTap editor component SHALL be the same editor component used elsewhere in the admin app (shared component); no duplicate implementation SHALL be introduced.
+
+---
+
+### Requirement 11: Category Overview Summary
 
 **User Story:** As an editor, I want to see a summary of category counts by type on the list page, so that I can quickly understand the taxonomy composition.
 

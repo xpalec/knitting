@@ -10,6 +10,8 @@ import type { BlockTemplate } from '@/lib/api/templates';
 import { TemplateEditorSheet } from '@/components/settings/template-editor-sheet';
 import { useAuthStore } from '@/store/auth';
 
+import { PageHeader } from '@/components/layout/page-header';
+
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -80,9 +82,7 @@ export default function TemplatesPage() {
   return (
     <div className="space-y-6">
       {/* Page header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-slate-800">Block Templates</h1>
-      </div>
+      <PageHeader title="Block Templates" description="Manage reusable content block templates" />
 
       {/* Error state */}
       {isError && (

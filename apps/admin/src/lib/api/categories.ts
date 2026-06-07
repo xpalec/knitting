@@ -13,7 +13,10 @@ export interface AdminCategoryTranslation {
   locale: string;
   name: string;
   slug: string;
+  short_description?: string | null;
   description?: unknown; // TipTap JSON
+  seo_title?: string | null;
+  seo_description?: string | null;
   translator_note?: string;
   status: TranslationStatus;
 }
@@ -24,6 +27,7 @@ export interface AdminCategory {
   parent_id: string | null;
   icon: string | null;
   sort_order: number;
+  color: string | null;
   status: CategoryStatus;
   entry_count: number;
   cover_image_url: string | null;
@@ -41,28 +45,28 @@ export interface AdminCategoryListParams {
   status?: CategoryStatus;
 }
 
+// Language-independent fields only — no name_en or slug_en
 export interface CreateCategoryPayload {
   type: CategoryType;
-  name_en: string;
-  slug_en: string;
-  icon?: string;
-  sort_order?: number;
-  cover_image_url?: string;
+  parent_id?: string | null;
+  color?: string;
   status?: CategoryStatus;
 }
 
 export interface UpdateCategoryPayload {
   type?: CategoryType;
-  icon?: string;
-  sort_order?: number;
+  parent_id?: string | null;
+  color?: string;
   status?: CategoryStatus;
-  cover_image_url?: string | null;
 }
 
 export interface UpsertTranslationPayload {
   name: string;
   slug: string;
-  description?: unknown;
+  short_description?: string;
+  description?: unknown; // TipTap JSON
+  seo_title?: string;
+  seo_description?: string;
   translator_note?: string;
   status?: TranslationStatus;
 }

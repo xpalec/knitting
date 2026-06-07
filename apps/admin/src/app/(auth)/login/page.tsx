@@ -57,10 +57,10 @@ export default function LoginPage() {
       <Card className="w-full max-w-sm shadow-lg">
         <CardHeader className="space-y-1">
           <div className="flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-violet-600 flex items-center justify-center">
               <span className="text-white text-sm font-bold">K</span>
             </div>
-            <span className="font-semibold text-slate-800">Knitting Admin</span>
+            <span className="font-semibold text-slate-800">Knitovia</span>
           </div>
           <CardTitle className="text-2xl">Sign in</CardTitle>
           <CardDescription>Enter your credentials to access the dashboard</CardDescription>

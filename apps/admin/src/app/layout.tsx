@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Knitting Admin",
-  description: "European Knitting Encyclopedia — Editorial Dashboard",
+  title: "Knitovia",
+  description: "Knitovia — Editorial Dashboard for the European Knitting Encyclopedia",
 };
 
 export default function RootLayout({

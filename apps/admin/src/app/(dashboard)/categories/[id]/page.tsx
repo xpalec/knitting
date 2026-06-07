@@ -1,50 +1,49 @@
 'use client';
 
-import { use, useState } from 'react';
+import { use, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Trash2, Pencil, Plus } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { adminCategoriesApi } from '@/lib/api/categories';
-import type { AdminCategory, TranslationStatus, UpsertTranslationPayload } from '@/lib/api/categories';
+import type { AdminCategory } from '@/lib/api/categories';
 import { ApiError } from '@/lib/api/client';
-import { CategoryForm } from '@/components/categories/category-form';
-import type { CategoryFormValues } from '@/components/categories/category-form';
+import { CategoryForm, SUPPORTED_LOCALES } from '@/components/categories/category-form';
+import type { CategoryFormValues, SupportedLocale, LocaleTabState } from '@/components/categories/category-form';
+import { APP_COLORS } from '@/lib/colors';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Badge } from '@/components/ui/badge';
-import { TranslationDialog } from '@/components/categories/translation-dialog';
-import type { TranslationDialogProps } from '@/components/categories/translation-dialog';
 
 // ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-const SUPPORTED_LOCALES = ['en', 'pl', 'de', 'no', 'fr'] as const;
-
-const TRANSLATION_STATUS_STYLES: Record<TranslationStatus, string> = {
-  draft:     'bg-slate-100 text-slate-600 border-slate-200',
-  reviewed:  'bg-yellow-50 text-yellow-700 border-yellow-200',
-  published: 'bg-green-50 text-green-700 border-green-200',
-};
-
-// ---------------------------------------------------------------------------
-// Helpers
+// Helper — map API category to form default values
 // ---------------------------------------------------------------------------
 
 function mapCategoryToFormValues(category: AdminCategory): CategoryFormValues {
-  const enTranslation = category.translations.find((t) => t.locale === 'en');
+  const locales = {} as Record<SupportedLocale, LocaleTabState>;
+
+  for (const locale of SUPPORTED_LOCALES) {
+    const t = category.translations.find((tr) => tr.locale === locale);
+    locales[locale] = {
+      name: t?.name ?? '',
+      slug: t?.slug ?? '',
+      slugManuallyEdited: Boolean(t?.slug),
+      short_description: t?.short_description ?? '',
+      description: t?.description ?? null,
+      seo_title: t?.seo_title ?? '',
+      seo_description: t?.seo_description ?? '',
+      status: t?.status ?? 'draft',
+    };
+  }
+
   return {
-    name: enTranslation?.name ?? '',
-    slug: enTranslation?.slug ?? '',
     type: category.type,
-    icon: category.icon ?? '',
-    sort_order: category.sort_order,
-    cover_image_url: category.cover_image_url ?? '',
+    parent_id: category.parent_id,
+    color: category.color ?? APP_COLORS.violet.bg,
     status: category.status,
+    locales,
   };
 }
 
@@ -61,16 +60,8 @@ export default function EditCategoryPage({
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  const [slugError, setSlugError] = useState<string | undefined>(undefined);
+  const [slugErrors, setSlugErrors] = useState<Partial<Record<SupportedLocale, string>>>({});
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-
-  // ── Translation dialog state ───────────────────────────────────────────────
-
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogLocale, setDialogLocale] = useState<string | null>(null);
-  const [dialogInitialValues, setDialogInitialValues] = useState<
-    TranslationDialogProps['initialValues'] | undefined
-  >(undefined);
 
   // ── Fetch category ────────────────────────────────────────────────────────
 
@@ -83,24 +74,55 @@ export default function EditCategoryPage({
     queryFn: () => adminCategoriesApi.getCategory(id),
   });
 
+  // ── Fetch parent categories for the dropdown ──────────────────────────────
+
+  const { data: parentData, isLoading: isLoadingParents, isError: isParentsError } = useQuery({
+    queryKey: ['categories-for-parent-select'],
+    queryFn: () => adminCategoriesApi.listCategories({ limit: 1000 }),
+  });
+
+  useEffect(() => {
+    if (isParentsError) toast.error('Failed to load parent categories');
+  }, [isParentsError]);
+
+  // Exclude self from parent options
+  const parentCategories = (parentData?.data ?? []).filter((c) => c.id !== id);
+
   // ── Update mutation ───────────────────────────────────────────────────────
 
   const updateMutation = useMutation({
-    mutationFn: (values: CategoryFormValues) =>
-      adminCategoriesApi.updateCategory(id, {
+    mutationFn: async (values: CategoryFormValues) => {
+      await adminCategoriesApi.updateCategory(id, {
         type: values.type as Exclude<typeof values.type, ''>,
-        icon: values.icon || undefined,
-        sort_order: values.sort_order,
+        parent_id: values.parent_id,
+        color: values.color || undefined,
         status: values.status,
-        cover_image_url: values.cover_image_url || null,
-      }),
+      });
+
+      const translationPromises = SUPPORTED_LOCALES
+        .filter((locale) => values.locales[locale].name.trim())
+        .map((locale) => {
+          const tab = values.locales[locale];
+          return adminCategoriesApi.upsertTranslation(id, locale, {
+            name: tab.name.trim(),
+            slug: tab.slug.trim(),
+            ...(tab.short_description.trim() ? { short_description: tab.short_description.trim() } : {}),
+            ...(tab.description ? { description: tab.description } : {}),
+            ...(tab.seo_title.trim() ? { seo_title: tab.seo_title.trim() } : {}),
+            ...(tab.seo_description.trim() ? { seo_description: tab.seo_description.trim() } : {}),
+            status: tab.status,
+          });
+        });
+
+      await Promise.all(translationPromises);
+    },
     onSuccess: () => {
       toast.success('Category saved');
       queryClient.invalidateQueries({ queryKey: ['category', id] });
     },
     onError: (err) => {
       if (err instanceof ApiError && err.status === 409) {
-        setSlugError('This slug is already taken');
+        toast.error('A slug is already taken — please check your locale slugs');
       } else {
         toast.error('Failed to save category');
       }
@@ -125,27 +147,8 @@ export default function EditCategoryPage({
     },
   });
 
-  // ── Upsert translation mutation ───────────────────────────────────────────
-
-  const upsertTranslationMutation = useMutation({
-    mutationFn: (payload: UpsertTranslationPayload) => {
-      if (!dialogLocale) throw new Error('No locale selected');
-      return adminCategoriesApi.upsertTranslation(id, dialogLocale, payload);
-    },
-    onSuccess: () => {
-      setDialogOpen(false);
-      queryClient.invalidateQueries({ queryKey: ['category', id] });
-    },
-    onError: () => {
-      toast.error('Failed to save translation');
-      // Keep dialog open — do not close
-    },
-  });
-
-  // ── Handlers ──────────────────────────────────────────────────────────────
-
   function handleSubmit(values: CategoryFormValues) {
-    setSlugError(undefined);
+    setSlugErrors({});
     updateMutation.mutate(values);
   }
 
@@ -153,19 +156,29 @@ export default function EditCategoryPage({
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center gap-4">
-          <Skeleton className="h-8 w-40" />
-        </div>
-        <Skeleton className="h-8 w-64" />
-        <div className="mx-auto max-w-2xl space-y-4">
-          <Skeleton className="h-10 w-full" />
-          <Skeleton className="h-10 w-full" />
-          <Skeleton className="h-10 w-full" />
-          <Skeleton className="h-10 w-full" />
-          <Skeleton className="h-10 w-full" />
-          <Skeleton className="h-10 w-full" />
-          <Skeleton className="h-10 w-full" />
+      <div className="p-6 space-y-6">
+        <Skeleton className="h-8 w-48" />
+        <div className="flex gap-5">
+          <div className="flex-1 space-y-4">
+            <div className="rounded-lg border border-slate-200 p-5 space-y-4">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-20 w-full" />
+            </div>
+            <div className="rounded-lg border border-slate-200 p-5">
+              <Skeleton className="h-48 w-full" />
+            </div>
+          </div>
+          <div className="w-[260px] space-y-4">
+            <div className="rounded-lg border border-slate-200 p-4 space-y-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-10 w-full" />
+              ))}
+            </div>
+            <div className="rounded-lg border border-slate-200 p-4 space-y-4">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-24 w-full" />
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -187,7 +200,7 @@ export default function EditCategoryPage({
     );
   }
 
-  // ── Generic error / missing data ──────────────────────────────────────────
+  // ── Generic error ─────────────────────────────────────────────────────────
 
   if (!category) {
     return (
@@ -206,137 +219,24 @@ export default function EditCategoryPage({
   // ── Render ────────────────────────────────────────────────────────────────
 
   const enTranslation = category.translations.find((t) => t.locale === 'en');
-  const pageTitle = enTranslation?.name ?? 'Edit Category';
+  const pageTitle = enTranslation?.name ?? 'Edit category';
 
   return (
     <>
-      <div className="space-y-6">
-        {/* Back link */}
-        <div className="flex items-center justify-between">
-          <Button variant="ghost" size="sm" asChild className="gap-1.5 text-slate-600">
-            <Link href="/categories">
-              <ArrowLeft size={16} aria-hidden="true" />
-              Back to Categories
-            </Link>
-          </Button>
-
-          {/* Delete button */}
-          <Button
-            variant="destructive"
-            size="sm"
-            className="gap-1.5"
-            onClick={() => setDeleteDialogOpen(true)}
-            disabled={deleteMutation.isPending}
-          >
-            <Trash2 size={16} aria-hidden="true" />
-            Delete Category
-          </Button>
-        </div>
-
-        <h1 className="text-2xl font-semibold text-slate-800">{pageTitle}</h1>
-
-        {/* Main form */}
-        <div className="mx-auto max-w-2xl">
-          <CategoryForm
-            defaultValues={mapCategoryToFormValues(category)}
-            submitLabel="Save Category"
-            isSubmitting={updateMutation.isPending}
-            slugError={slugError}
-            onSubmit={handleSubmit}
-            onCancel={() => router.push('/categories')}
-          />
-        </div>
-
-        {/* Translations section */}
-        <div className="mx-auto max-w-2xl space-y-4">
-          <h2 className="text-lg font-semibold text-slate-800">Translations</h2>
-
-          {/* Existing translations table */}
-          {category.translations.length > 0 && (
-            <div className="rounded-md border border-slate-200 overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50 text-slate-600">
-                  <tr>
-                    <th className="px-4 py-2.5 text-left font-medium">Locale</th>
-                    <th className="px-4 py-2.5 text-left font-medium">Name</th>
-                    <th className="px-4 py-2.5 text-left font-medium">Slug</th>
-                    <th className="px-4 py-2.5 text-left font-medium">Status</th>
-                    <th className="px-4 py-2.5 text-right font-medium">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {category.translations.map((t) => (
-                    <tr key={t.locale} className="bg-white">
-                      <td className="px-4 py-2.5 font-mono text-xs uppercase text-slate-700">
-                        {t.locale}
-                      </td>
-                      <td className="px-4 py-2.5 text-slate-800">{t.name}</td>
-                      <td className="px-4 py-2.5 font-mono text-xs text-slate-500">{t.slug}</td>
-                      <td className="px-4 py-2.5">
-                        <Badge
-                          variant="outline"
-                          className={TRANSLATION_STATUS_STYLES[t.status]}
-                        >
-                          {t.status}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-2.5 text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="gap-1.5 text-slate-600"
-                          onClick={() => {
-                            setDialogLocale(t.locale);
-                            setDialogInitialValues({
-                              name: t.name,
-                              slug: t.slug,
-                              translator_note: t.translator_note,
-                              status: t.status,
-                            });
-                            setDialogOpen(true);
-                          }}
-                        >
-                          <Pencil size={14} aria-hidden="true" />
-                          Edit
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* Add Translation buttons for missing locales */}
-          {(() => {
-            const existingLocales = new Set(category.translations.map((t) => t.locale));
-            const missingLocales = SUPPORTED_LOCALES.filter((l) => !existingLocales.has(l));
-            if (missingLocales.length === 0) return null;
-            return (
-              <div className="flex flex-wrap gap-2">
-                {missingLocales.map((locale) => (
-                  <Button
-                    key={locale}
-                    variant="outline"
-                    size="sm"
-                    className="gap-1.5"
-                    onClick={() => {
-                      setDialogLocale(locale);
-                      setDialogInitialValues(undefined);
-                      setDialogOpen(true);
-                    }}
-                  >
-                    <Plus size={14} aria-hidden="true" />
-                    Add Translation ({locale.toUpperCase()})
-                  </Button>
-                ))}
-              </div>
-            );
-          })()}
-        </div>
+      <div className="p-6">
+        <CategoryForm
+          defaultValues={mapCategoryToFormValues(category)}
+          parentCategories={parentCategories}
+          isLoadingParents={isLoadingParents}
+          isSubmitting={updateMutation.isPending}
+          slugErrors={slugErrors}
+          onSubmit={handleSubmit}
+          onCancel={() => router.push('/categories')}
+          onDelete={() => setDeleteDialogOpen(true)}
+          title={pageTitle}
+        />
       </div>
 
-      {/* Delete confirmation dialog */}
       <ConfirmDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
@@ -346,18 +246,6 @@ export default function EditCategoryPage({
         onConfirm={() => deleteMutation.mutate()}
         loading={deleteMutation.isPending}
       />
-
-      {/* Translation dialog */}
-      {dialogLocale && (
-        <TranslationDialog
-          open={dialogOpen}
-          onOpenChange={setDialogOpen}
-          locale={dialogLocale}
-          initialValues={dialogInitialValues}
-          onSubmit={(payload) => upsertTranslationMutation.mutate(payload)}
-          isSubmitting={upsertTranslationMutation.isPending}
-        />
-      )}
     </>
   );
 }

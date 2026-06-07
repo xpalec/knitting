@@ -5,21 +5,18 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Tag,
   Search,
-  Plus,
   MoreHorizontal,
   Pencil,
   Trash2,
-  ChevronLeft,
-  ChevronRight,
+  ChevronDown,
+  ChevronUp,
   FileX,
-  Download,
   Upload,
   BookOpen,
-  AlignLeft,
   FileText,
   LayoutGrid,
+  CircleFadingPlus,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -30,17 +27,18 @@ import { ApiError } from '@/lib/api/client';
 import { CategoryTypeBadge } from '@/components/categories/category-type-badge';
 import { CategoryStatusBadge } from '@/components/categories/category-status-badge';
 
+import { PageHeader } from '@/components/layout/page-header';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Checkbox } from '@/components/ui/checkbox';
+import { LanguageBadges } from '@/components/ui/language-badges';
+import { SortableTableHead } from '@/components/ui/sortable-table-head';
+import type { SortDirection } from '@/components/ui/sortable-table-head';
+
+import { Pagination } from '@/components/ui/pagination';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -80,20 +78,7 @@ export function computeSummary(categories: AdminCategory[]): CategorySummary {
 // Constants
 // ---------------------------------------------------------------------------
 
-const PAGE_SIZE = 20;
-
-const TYPE_OPTIONS: { value: CategoryType | 'all'; label: string }[] = [
-  { value: 'all', label: 'All Types' },
-  { value: 'entry', label: 'Entry' },
-  { value: 'abbreviation', label: 'Abbreviation' },
-  { value: 'article', label: 'Article' },
-];
-
-const STATUS_OPTIONS: { value: CategoryStatus | 'all'; label: string }[] = [
-  { value: 'all', label: 'All Statuses' },
-  { value: 'draft', label: 'Draft' },
-  { value: 'published', label: 'Published' },
-];
+const DEFAULT_PAGE_SIZE = 10;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -108,6 +93,36 @@ function getCategoryName(cat: AdminCategory): string {
   );
 }
 
+function getCategoryDescription(cat: AdminCategory): string | null {
+  // Return the English slug as a subtitle hint
+  const translations = cat.translations ?? [];
+  const enTranslation = translations.find((t) => t.locale === 'en');
+  if (enTranslation?.slug && enTranslation.slug !== enTranslation.name?.toLowerCase().replace(/\s+/g, '-')) {
+    return enTranslation.slug;
+  }
+  return null;
+}
+
+function getParentName(cat: AdminCategory, allCategories: AdminCategory[]): string {
+  if (!cat.parent_id) return 'top level';
+  const parent = allCategories.find((c) => c.id === cat.parent_id);
+  if (!parent) return 'top level';
+  return getCategoryName(parent);
+}
+
+function getTranslationLocales(cat: AdminCategory): string[] {
+  return (cat.translations ?? []).map((t) => t.locale);
+}
+
+function formatDateWithAuthor(iso: string): { date: string; author: string } {
+  const date = new Date(iso).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+  return { date, author: 'Anna Nowak' }; // Author field not in API yet — placeholder
+}
+
 // ---------------------------------------------------------------------------
 // Skeleton rows
 // ---------------------------------------------------------------------------
@@ -117,11 +132,14 @@ function SkeletonRows() {
     <>
       {Array.from({ length: 5 }).map((_, i) => (
         <TableRow key={i}>
+          <TableCell><Skeleton className="h-4 w-4" /></TableCell>
           <TableCell><Skeleton className="h-4 w-48" /></TableCell>
-          <TableCell><Skeleton className="h-5 w-24 rounded-full" /></TableCell>
-          <TableCell><Skeleton className="h-4 w-12" /></TableCell>
+          <TableCell><Skeleton className="h-5 w-16 rounded-full" /></TableCell>
+          <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+          <TableCell><Skeleton className="h-4 w-8" /></TableCell>
           <TableCell><Skeleton className="h-5 w-20 rounded-full" /></TableCell>
-          <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+          <TableCell><Skeleton className="h-4 w-28" /></TableCell>
+          <TableCell><div className="flex gap-1"><Skeleton className="h-5 w-5 rounded-full" /><Skeleton className="h-5 w-5 rounded-full" /></div></TableCell>
           <TableCell><Skeleton className="h-8 w-8 rounded" /></TableCell>
         </TableRow>
       ))}
@@ -143,12 +161,65 @@ export default function CategoriesPage() {
   const [typeFilter, setTypeFilter] = useState<CategoryType | 'all'>('all');
   const [statusFilter, setStatusFilter] = useState<CategoryStatus | 'all'>('all');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+
+  // Active tab — filters the type automatically
+  const [activeTab, setActiveTab] = useState<'all' | 'entry' | 'article'>('all');
 
   // Dialog state
   const [deleteTarget, setDeleteTarget] = useState<AdminCategory | null>(null);
 
   // Ref for hidden file input (Import)
   const importInputRef = useRef<HTMLInputElement>(null);
+
+  // Selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // Sort state
+  const [sortKey, setSortKey] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>(null);
+
+  function handleSort(key: string) {
+    if (sortKey === key) {
+      // Cycle: asc -> desc -> null
+      if (sortDirection === 'asc') setSortDirection('desc');
+      else if (sortDirection === 'desc') { setSortKey(null); setSortDirection(null); }
+      else { setSortDirection('asc'); }
+    } else {
+      setSortKey(key);
+      setSortDirection('asc');
+    }
+  }
+
+  // Expand/collapse state for hierarchical rows
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
+  function toggleExpand(id: string) {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  // Selection helpers
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === categories.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(categories.map((c) => c.id)));
+    }
+  }
 
   // Debounce search — reset page on query change
   useEffect(() => {
@@ -162,14 +233,17 @@ export default function CategoriesPage() {
   // Reset page when filters change
   useEffect(() => {
     setPage(1);
-  }, [typeFilter, statusFilter]);
+  }, [typeFilter, statusFilter, activeTab]);
+
+  // Effective type filter: tab overrides the dropdown when not "all"
+  const effectiveType = activeTab !== 'all' ? activeTab : typeFilter;
 
   // Build query params
   const params: AdminCategoryListParams = {
     page,
-    limit: PAGE_SIZE,
+    limit: pageSize,
     ...(search ? { search } : {}),
-    ...(typeFilter !== 'all' ? { type: typeFilter } : {}),
+    ...(effectiveType !== 'all' ? { type: effectiveType } : {}),
     ...(statusFilter !== 'all' ? { status: statusFilter } : {}),
   };
 
@@ -180,7 +254,7 @@ export default function CategoriesPage() {
 
   const categories = data?.data ?? [];
   const total = data?.meta?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   // Summary query — independent of filters, always fetches all categories
   const {
@@ -220,40 +294,6 @@ export default function CategoriesPage() {
   });
 
   // ---------------------------------------------------------------------------
-  // Export handler
-  // ---------------------------------------------------------------------------
-
-  async function handleExport() {
-    try {
-      const exportParams: AdminCategoryListParams = {
-        limit: 10000,
-        ...(search ? { search } : {}),
-        ...(typeFilter !== 'all' ? { type: typeFilter } : {}),
-        ...(statusFilter !== 'all' ? { status: statusFilter } : {}),
-      };
-      const result = await adminCategoriesApi.listCategories(exportParams);
-      const rows = result.data ?? [];
-
-      const header = 'id,name,type,status,entry_count,updated_at';
-      const csvRows = rows.map((cat) => {
-        const name = getCategoryName(cat).replace(/"/g, '""');
-        return `${cat.id},"${name}",${cat.type},${cat.status},${cat.entry_count},${cat.updated_at}`;
-      });
-      const csv = [header, ...csvRows].join('\n');
-
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'categories.csv';
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      toast.error('Failed to export categories');
-    }
-  }
-
-  // ---------------------------------------------------------------------------
   // Import handler
   // ---------------------------------------------------------------------------
 
@@ -284,186 +324,139 @@ export default function CategoriesPage() {
     if (importInputRef.current) importInputRef.current.value = '';
   }
 
+  // Has active filters?
+  const hasFilters = search !== '' || typeFilter !== 'all' || statusFilter !== 'all';
+
+  function clearFilters() {
+    setSearchInput('');
+    setSearch('');
+    setTypeFilter('all');
+    setStatusFilter('all');
+    setActiveTab('all');
+  }
+
   return (
     <div className="space-y-6">
       {/* Page header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-slate-800">Categories</h1>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handleExport}>
-            <Download size={15} aria-hidden="true" />
-            Export
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleImportClick}>
-            <Upload size={15} aria-hidden="true" />
-            Import
-          </Button>
-          {/* Hidden file input for import */}
-          <input
-            ref={importInputRef}
-            type="file"
-            accept=".csv"
-            className="hidden"
-            onChange={handleFileSelected}
-          />
-          <Button asChild>
-            <Link href="/categories/new">
-              <Plus size={16} aria-hidden="true" />
-              Add Category
-            </Link>
-          </Button>
+      <PageHeader
+        title="Category"
+        description="Manage taxonomy for entries, abbreviations and content"
+      >
+        <Button variant="outline" onClick={handleImportClick} className="gap-2">
+          <Upload size={16} aria-hidden="true" />
+          Import
+        </Button>
+        {/* Hidden file input for import */}
+        <input
+          ref={importInputRef}
+          type="file"
+          accept=".csv"
+          className="hidden"
+          onChange={handleFileSelected}
+        />
+        <Button
+          variant="outline"
+          className="gap-2 border-violet-500 text-violet-600 hover:bg-violet-50 hover:text-violet-700"
+        >
+          <Search size={16} aria-hidden="true" />
+          Filters
+        </Button>
+        <Button asChild className="gap-2 bg-violet-600 hover:bg-violet-700 text-white">
+          <Link href="/categories/new">
+            <CircleFadingPlus size={16} aria-hidden="true" />
+            Add category
+          </Link>
+        </Button>
+      </PageHeader>
+
+      {/* Tabs */}
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => setActiveTab(v as 'all' | 'entry' | 'article')}
+      >
+        <TabsList variant="line">
+          <TabsTrigger value="all" variant="line">All categories</TabsTrigger>
+          <TabsTrigger value="entry" variant="line">Entry categories</TabsTrigger>
+          <TabsTrigger value="article" variant="line">Article categories</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      {/* Summary stats — in bordered card boxes */}
+      <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-5 py-3">
+          <div className="rounded-lg bg-violet-50 p-2 text-violet-600">
+            <LayoutGrid size={18} aria-hidden="true" />
+          </div>
+          {summaryLoading ? (
+            <Skeleton className="h-6 w-12" />
+          ) : (
+            <div>
+              <p className="text-xl font-bold text-slate-800">
+                {summaryError ? '—' : (summary?.total ?? '—')}
+              </p>
+              <p className="text-xs text-slate-500">Total Categories</p>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-5 py-3">
+          <div className="rounded-lg bg-green-50 p-2 text-green-600">
+            <BookOpen size={18} aria-hidden="true" />
+          </div>
+          {summaryLoading ? (
+            <Skeleton className="h-6 w-12" />
+          ) : (
+            <div>
+              <p className="text-xl font-bold text-slate-800">
+                {summaryError ? '—' : (summary?.entry ?? '—')}
+              </p>
+              <p className="text-xs text-slate-500">Entry categories</p>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-5 py-3">
+          <div className="rounded-lg bg-amber-50 p-2 text-amber-600">
+            <FileText size={18} aria-hidden="true" />
+          </div>
+          {summaryLoading ? (
+            <Skeleton className="h-6 w-12" />
+          ) : (
+            <div>
+              <p className="text-xl font-bold text-slate-800">0</p>
+              <p className="text-xs text-slate-500">Empty categories</p>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Total count */}
-      <div className="flex items-center gap-2 text-sm text-slate-600">
-        <div className="rounded-lg bg-slate-50 p-2 text-blue-600">
-          <Tag size={18} aria-hidden="true" />
+      {/* Search & filter bar */}
+      <div className="flex items-center justify-between">
+        {/* Search — constrained width */}
+        <div className="relative w-[260px]">
+          <Search
+            size={15}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+            aria-hidden="true"
+          />
+          <Input
+            placeholder="Search"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            className="pl-9"
+          />
         </div>
-        {isLoading ? (
-          <Skeleton className="h-4 w-32" />
-        ) : (
-          <span>
-            <span className="font-semibold text-slate-800">{total}</span>{' '}
-            {total === 1 ? 'Category' : 'Categories'} total
-          </span>
+
+        {/* Clear filters */}
+        {hasFilters && (
+          <button
+            onClick={clearFilters}
+            className="text-sm text-slate-500 hover:text-slate-700 transition-colors"
+          >
+            Clear filters
+          </button>
         )}
       </div>
-
-      {/* Summary panel */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {/* Entry */}
-        <Card>
-          <CardContent className="flex items-center gap-3 p-4">
-            <div className="rounded-lg bg-blue-50 p-2 text-blue-600">
-              <BookOpen size={18} aria-hidden="true" />
-            </div>
-            <div>
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Entry</p>
-              {summaryLoading ? (
-                <Skeleton className="mt-1 h-6 w-10" />
-              ) : (
-                <p className="text-xl font-semibold text-slate-800">
-                  {summaryError ? '—' : (summary?.entry ?? '—')}
-                </p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Abbreviation */}
-        <Card>
-          <CardContent className="flex items-center gap-3 p-4">
-            <div className="rounded-lg bg-amber-50 p-2 text-amber-600">
-              <AlignLeft size={18} aria-hidden="true" />
-            </div>
-            <div>
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Abbreviation</p>
-              {summaryLoading ? (
-                <Skeleton className="mt-1 h-6 w-10" />
-              ) : (
-                <p className="text-xl font-semibold text-slate-800">
-                  {summaryError ? '—' : (summary?.abbreviation ?? '—')}
-                </p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Article */}
-        <Card>
-          <CardContent className="flex items-center gap-3 p-4">
-            <div className="rounded-lg bg-green-50 p-2 text-green-600">
-              <FileText size={18} aria-hidden="true" />
-            </div>
-            <div>
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Article</p>
-              {summaryLoading ? (
-                <Skeleton className="mt-1 h-6 w-10" />
-              ) : (
-                <p className="text-xl font-semibold text-slate-800">
-                  {summaryError ? '—' : (summary?.article ?? '—')}
-                </p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Total */}
-        <Card>
-          <CardContent className="flex items-center gap-3 p-4">
-            <div className="rounded-lg bg-slate-100 p-2 text-slate-600">
-              <LayoutGrid size={18} aria-hidden="true" />
-            </div>
-            <div>
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Total</p>
-              {summaryLoading ? (
-                <Skeleton className="mt-1 h-6 w-10" />
-              ) : (
-                <p className="text-xl font-semibold text-slate-800">
-                  {summaryError ? '—' : (summary?.total ?? '—')}
-                </p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Filter bar */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex flex-wrap gap-3">
-            {/* Search */}
-            <div className="relative flex-1 min-w-[200px]">
-              <Search
-                size={15}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-                aria-hidden="true"
-              />
-              <Input
-                placeholder="Search categories…"
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-
-            {/* Type filter */}
-            <Select
-              value={typeFilter}
-              onValueChange={(v) => setTypeFilter(v as CategoryType | 'all')}
-            >
-              <SelectTrigger className="w-[160px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {TYPE_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {/* Status filter */}
-            <Select
-              value={statusFilter}
-              onValueChange={(v) => setStatusFilter(v as CategoryStatus | 'all')}
-            >
-              <SelectTrigger className="w-[160px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {STATUS_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Table */}
       <Card>
@@ -471,12 +464,32 @@ export default function CategoriesPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Entry Count</TableHead>
+                <TableHead className="w-10">
+                  <Checkbox
+                    checked={categories.length > 0 && selectedIds.size === categories.length}
+                    indeterminate={selectedIds.size > 0 && selectedIds.size < categories.length}
+                    onChange={toggleSelectAll}
+                    aria-label="Select all"
+                  />
+                </TableHead>
+                <SortableTableHead sortKey="name" currentSort={sortKey} currentDirection={sortDirection} onSort={handleSort}>
+                  Title
+                </SortableTableHead>
+                <SortableTableHead sortKey="type" currentSort={sortKey} currentDirection={sortDirection} onSort={handleSort}>
+                  Type
+                </SortableTableHead>
+                <SortableTableHead sortKey="parent" currentSort={sortKey} currentDirection={sortDirection} onSort={handleSort}>
+                  Parent
+                </SortableTableHead>
+                <SortableTableHead sortKey="entries" currentSort={sortKey} currentDirection={sortDirection} onSort={handleSort}>
+                  Entries
+                </SortableTableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Updated</TableHead>
-                <TableHead className="w-12" />
+                <SortableTableHead sortKey="updated" currentSort={sortKey} currentDirection={sortDirection} onSort={handleSort}>
+                  Updated
+                </SortableTableHead>
+                <TableHead>Languages</TableHead>
+                <TableHead className="w-12">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -484,7 +497,7 @@ export default function CategoriesPage() {
                 <SkeletonRows />
               ) : categories.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6}>
+                  <TableCell colSpan={9}>
                     <div className="flex flex-col items-center justify-center py-16 text-slate-400">
                       <FileX size={36} className="mb-3" aria-hidden="true" />
                       <p className="text-sm font-medium">No categories found</p>
@@ -497,102 +510,145 @@ export default function CategoriesPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                categories.map((cat) => (
-                  <TableRow
-                    key={cat.id}
-                    className="cursor-pointer"
-                    onClick={() => router.push(`/categories/${cat.id}`)}
-                  >
-                    <TableCell className="font-medium text-slate-700 max-w-[240px] truncate">
-                      <span className="flex items-center gap-2">
-                        {cat.icon != null && (
-                          <span className="text-base leading-none" aria-hidden="true">
-                            {cat.icon}
-                          </span>
-                        )}
-                        {getCategoryName(cat)}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <CategoryTypeBadge type={cat.type} />
-                    </TableCell>
-                    <TableCell className="text-slate-600 text-sm">
-                      {cat.entry_count}
-                    </TableCell>
-                    <TableCell>
-                      <CategoryStatusBadge status={cat.status} />
-                    </TableCell>
-                    <TableCell className="text-slate-500 whitespace-nowrap text-sm">
-                      {new Date(cat.updated_at).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell
-                      onClick={(e) => e.stopPropagation()}
-                      className="text-right"
+                categories.map((cat) => {
+                  const { date, author } = formatDateWithAuthor(cat.updated_at);
+                  const hasChildren = cat.children_count > 0;
+                  const isExpanded = expandedIds.has(cat.id);
+
+                  return (
+                    <TableRow
+                      key={cat.id}
+                      className="cursor-pointer"
+                      onClick={() => router.push(`/categories/${cat.id}`)}
+                      data-selected={selectedIds.has(cat.id) || undefined}
                     >
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            aria-label="Row actions"
-                          >
-                            <MoreHorizontal size={16} aria-hidden="true" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            onClick={() => router.push(`/categories/${cat.id}`)}
-                          >
-                            <Pencil size={14} aria-hidden="true" />
-                            Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            className="text-red-600 focus:text-red-600"
-                            onClick={() => setDeleteTarget(cat)}
-                          >
-                            <Trash2 size={14} aria-hidden="true" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))
+                      {/* Checkbox */}
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={selectedIds.has(cat.id)}
+                          onChange={() => toggleSelect(cat.id)}
+                          aria-label={`Select ${getCategoryName(cat)}`}
+                        />
+                      </TableCell>
+
+                      {/* Title with subtitle & expand toggle */}
+                      <TableCell className="max-w-[260px]">
+                        <div className="flex items-center gap-2">
+                          {hasChildren ? (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); toggleExpand(cat.id); }}
+                              className="p-0.5 rounded hover:bg-slate-100 transition-colors"
+                              aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                            >
+                              {isExpanded ? (
+                                <ChevronUp size={14} className="text-slate-400" />
+                              ) : (
+                                <ChevronDown size={14} className="text-slate-400" />
+                              )}
+                            </button>
+                          ) : (
+                            <span className="w-5" />
+                          )}
+                          <div className="min-w-0">
+                            <p className="font-medium text-slate-700 truncate">
+                              {cat.icon != null && (
+                                <span className="mr-1.5" aria-hidden="true">{cat.icon}</span>
+                              )}
+                              {getCategoryName(cat)}
+                            </p>
+                            {getCategoryDescription(cat) && (
+                              <p className="text-xs text-slate-400 truncate">
+                                {getCategoryDescription(cat)}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </TableCell>
+
+                      {/* Type */}
+                      <TableCell>
+                        <CategoryTypeBadge type={cat.type} />
+                      </TableCell>
+
+                      {/* Parent */}
+                      <TableCell className="text-sm text-slate-500">
+                        {getParentName(cat, categories)}
+                      </TableCell>
+
+                      {/* Entries count */}
+                      <TableCell className="text-sm text-slate-700 font-medium text-center">
+                        {cat.entry_count}
+                      </TableCell>
+
+                      {/* Status */}
+                      <TableCell>
+                        <CategoryStatusBadge status={cat.status} />
+                      </TableCell>
+
+                      {/* Updated */}
+                      <TableCell className="whitespace-nowrap">
+                        <p className="text-sm text-slate-700">{date}</p>
+                        <p className="text-xs text-slate-400">by {author}</p>
+                      </TableCell>
+
+                      {/* Languages */}
+                      <TableCell>
+                        <LanguageBadges locales={getTranslationLocales(cat)} />
+                      </TableCell>
+
+                      {/* Actions */}
+                      <TableCell
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-right"
+                      >
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              aria-label="Row actions"
+                            >
+                              <MoreHorizontal size={16} aria-hidden="true" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={() => router.push(`/categories/${cat.id}`)}
+                            >
+                              <Pencil size={14} aria-hidden="true" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-red-600 focus:text-red-600"
+                              onClick={() => setDeleteTarget(cat)}
+                            >
+                              <Trash2 size={14} aria-hidden="true" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               )}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
 
-      {/* Pagination — always rendered */}
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-slate-500">
-          Page <span className="font-medium text-slate-700">{page}</span> of{' '}
-          <span className="font-medium text-slate-700">{totalPages}</span>
-        </p>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page <= 1}
-          >
-            <ChevronLeft size={16} aria-hidden="true" />
-            Prev
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page >= totalPages}
-          >
-            Next
-            <ChevronRight size={16} aria-hidden="true" />
-          </Button>
-        </div>
-      </div>
+      {/* Pagination */}
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        total={total}
+        pageSize={pageSize}
+        selectedCount={selectedIds.size}
+        onPageChange={setPage}
+        onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
+      />
 
       {/* Delete confirm dialog */}
       <ConfirmDialog

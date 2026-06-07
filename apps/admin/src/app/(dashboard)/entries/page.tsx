@@ -12,8 +12,6 @@ import {
   Pencil,
   RefreshCw,
   Trash2,
-  ChevronLeft,
-  ChevronRight,
   FileX,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -21,6 +19,9 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { entriesApi } from '@/lib/api/entries';
 import type { EntryStatus, SkillLevel, Entry } from '@/lib/api/entries';
+
+import { PageHeader } from '@/components/layout/page-header';
+import { Pagination } from '@/components/ui/pagination';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -62,7 +63,7 @@ import {
 // Constants
 // ---------------------------------------------------------------------------
 
-const PAGE_SIZE = 20;
+const DEFAULT_PAGE_SIZE = 10;
 
 const STATUS_OPTIONS: { value: EntryStatus | 'all'; label: string }[] = [
   { value: 'all', label: 'All Statuses' },
@@ -93,19 +94,26 @@ const LANGUAGE_OPTIONS: { value: string }[] = [
 // Badge helpers
 // ---------------------------------------------------------------------------
 
+const STATUS_COLORS: Record<EntryStatus, { bg: string; color: string }> = {
+  draft:      { bg: '#F1F5F9', color: '#64748B' },
+  review:     { bg: '#FEF9C3', color: '#A16207' },
+  published:  { bg: '#EAF6F0', color: '#63A48B' },
+  deprecated: { bg: '#FEE2E2', color: '#DC2626' },
+};
+
+const SKILL_COLORS: Record<SkillLevel, { bg: string; color: string }> = {
+  beginner:     { bg: '#EAF6F0', color: '#63A48B' },
+  intermediate: { bg: '#DBEAFE', color: '#1D4ED8' },
+  advanced:     { bg: '#FFEDD5', color: '#C2410C' },
+  expert:       { bg: '#FEE2E2', color: '#DC2626' },
+};
+
 function StatusBadge({ status }: { status: EntryStatus }) {
-  const styles: Record<EntryStatus, string> = {
-    draft: 'bg-slate-100 text-slate-600 border-slate-200',
-    review: 'bg-yellow-50 text-yellow-700 border-yellow-200',
-    published: 'bg-green-50 text-green-700 border-green-200',
-    deprecated: 'bg-red-50 text-red-700 border-red-200',
-  };
+  const { bg, color } = STATUS_COLORS[status];
   return (
     <span
-      className={cn(
-        'inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium capitalize',
-        styles[status],
-      )}
+      className="inline-flex items-center justify-center rounded-lg px-4 py-1 text-xs font-semibold capitalize min-w-[72px]"
+      style={{ backgroundColor: bg, color }}
     >
       {status}
     </span>
@@ -114,18 +122,11 @@ function StatusBadge({ status }: { status: EntryStatus }) {
 
 function SkillBadge({ level }: { level?: SkillLevel }) {
   if (!level) return <span className="text-slate-400 text-xs">—</span>;
-  const styles: Record<SkillLevel, string> = {
-    beginner: 'bg-green-50 text-green-700 border-green-200',
-    intermediate: 'bg-blue-50 text-blue-700 border-blue-200',
-    advanced: 'bg-orange-50 text-orange-700 border-orange-200',
-    expert: 'bg-red-50 text-red-700 border-red-200',
-  };
+  const { bg, color } = SKILL_COLORS[level];
   return (
     <span
-      className={cn(
-        'inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium capitalize',
-        styles[level],
-      )}
+      className="inline-flex items-center justify-center rounded-lg px-4 py-1 text-xs font-semibold capitalize min-w-[72px]"
+      style={{ backgroundColor: bg, color }}
     >
       {level}
     </span>
@@ -268,6 +269,7 @@ export default function EntriesPage() {
   const [skillLevel, setSkillLevel] = useState<SkillLevel | 'all'>('all');
   const [originLanguage, setOriginLanguage] = useState<string>('all');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
   // Dialog state
   const [deleteTarget, setDeleteTarget] = useState<Entry | null>(null);
@@ -290,7 +292,7 @@ export default function EntriesPage() {
   // Build query params
   const params = {
     page,
-    limit: PAGE_SIZE,
+    limit: pageSize,
     ...(q ? { q } : {}),
     ...(status !== 'all' ? { status } : {}),
     ...(skillLevel !== 'all' ? { skillLevel } : {}),
@@ -304,7 +306,7 @@ export default function EntriesPage() {
 
   const entries = data?.data ?? [];
   const total = data?.meta?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   // Delete mutation
   const deleteMutation = useMutation({
@@ -336,19 +338,28 @@ export default function EntriesPage() {
   return (
     <div className="space-y-6">
       {/* Page header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-slate-800">Entries</h1>
-        <Button asChild>
+      <PageHeader
+        title="Entries"
+        description="Manage encyclopedia entries, translations and content blocks"
+      >
+        <Button
+          variant="outline"
+          className="gap-2 border-violet-500 text-violet-600 hover:bg-violet-50 hover:text-violet-700"
+        >
+          <Search size={16} aria-hidden="true" />
+          Filters
+        </Button>
+        <Button asChild className="gap-2 bg-violet-600 hover:bg-violet-700 text-white">
           <Link href="/entries/new">
             <Plus size={16} aria-hidden="true" />
-            New Entry
+            Add
           </Link>
         </Button>
-      </div>
+      </PageHeader>
 
       {/* Stats row */}
       <div className="flex items-center gap-2 text-sm text-slate-600">
-        <div className="rounded-lg bg-slate-50 p-2 text-blue-600">
+        <div className="rounded-lg bg-violet-50 p-2 text-violet-600">
           <BookOpen size={18} aria-hidden="true" />
         </div>
         {isLoading ? (
@@ -538,32 +549,14 @@ export default function EntriesPage() {
 
       {/* Pagination */}
       {!isLoading && entries.length > 0 && (
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-slate-500">
-            Page <span className="font-medium text-slate-700">{page}</span> of{' '}
-            <span className="font-medium text-slate-700">{totalPages}</span>
-          </p>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page <= 1}
-            >
-              <ChevronLeft size={16} aria-hidden="true" />
-              Prev
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page >= totalPages}
-            >
-              Next
-              <ChevronRight size={16} aria-hidden="true" />
-            </Button>
-          </div>
-        </div>
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          total={total}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
+        />
       )}
 
       {/* Delete confirm dialog */}

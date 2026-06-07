@@ -16,6 +16,22 @@ import { UpsertCategoryTranslationDto } from './dto/upsert-category-translation.
 // Locales whose public tree cache must be invalidated on any category change
 const SUPPORTED_LOCALES = ['en', 'pl', 'de', 'no', 'fr'];
 
+// Palette of accent colors for category badges — must match APP_COLORS in apps/admin/src/lib/colors.ts
+const CATEGORY_COLORS = [
+  '#EDE7FF', // violet
+  '#FEF4EA', // peach
+  '#FDEAEA', // red
+  '#ECF9EF', // green
+  '#EBF5FF', // blue
+  '#ECFBFD', // cyan
+  '#FDECFC', // pink
+  '#DEDEDE', // grey
+];
+
+function randomCategoryColor(): string {
+  return CATEGORY_COLORS[Math.floor(Math.random() * CATEGORY_COLORS.length)];
+}
+
 @Injectable()
 export class AdminCategoryService {
   constructor(
@@ -52,7 +68,15 @@ export class AdminCategoryService {
         include: {
           translations: {
             orderBy: { locale: 'asc' },
-            select: { locale: true, name: true, slug: true, status: true },
+            select: {
+              locale: true,
+              name: true,
+              slug: true,
+              short_description: true,
+              seo_title: true,
+              seo_description: true,
+              status: true,
+            },
           },
           _count: { select: { entries: true, children: true } },
         },
@@ -71,6 +95,7 @@ export class AdminCategoryService {
         icon: c.icon,
         sort_order: c.sort_order,
         status: c.status,
+        color: c.color,
         entry_count: c.entry_count,
         cover_image_url: c.cover_image_url,
         translations: c.translations,
@@ -103,17 +128,6 @@ export class AdminCategoryService {
   }
 
   async create(dto: CreateCategoryDto) {
-    // Check slug uniqueness for the English translation
-    const existingSlug = await this.prisma.categoryTranslation.findUnique({
-      where: { locale_slug: { locale: 'en', slug: dto.slug_en } },
-      select: { id: true },
-    });
-    if (existingSlug) {
-      throw new ConflictException(
-        `A category with English slug '${dto.slug_en}' already exists`,
-      );
-    }
-
     // Validate parent exists if provided
     if (dto.parent_id) {
       await this.assertCategoryExists(dto.parent_id);
@@ -126,15 +140,8 @@ export class AdminCategoryService {
         icon: dto.icon ?? null,
         sort_order: dto.sort_order ?? 0,
         cover_image_url: dto.cover_image_url ?? null,
-        status: 'draft',
-        translations: {
-          create: {
-            locale: 'en',
-            name: dto.name_en,
-            slug: dto.slug_en,
-            status: 'draft',
-          },
-        },
+        status: (dto.status as never) ?? 'draft',
+        color: dto.color ?? randomCategoryColor(),
       },
       include: { translations: true },
     });
@@ -165,6 +172,7 @@ export class AdminCategoryService {
         ...(dto.sort_order !== undefined && { sort_order: dto.sort_order }),
         ...(dto.status !== undefined && { status: dto.status as never }),
         ...(dto.cover_image_url !== undefined && { cover_image_url: dto.cover_image_url }),
+        ...(dto.color !== undefined && { color: dto.color }),
       },
     });
 
@@ -229,6 +237,9 @@ export class AdminCategoryService {
         name: dto.name,
         slug: dto.slug,
         description: (dto.description ?? null) as never,
+        short_description: dto.short_description ?? null,
+        seo_title: dto.seo_title ?? null,
+        seo_description: dto.seo_description ?? null,
         translator_note: dto.translator_note ?? null,
         status: (dto.status as never) ?? 'draft',
       },
@@ -236,6 +247,9 @@ export class AdminCategoryService {
         name: dto.name,
         slug: dto.slug,
         ...(dto.description !== undefined && { description: dto.description as never }),
+        ...(dto.short_description !== undefined && { short_description: dto.short_description }),
+        ...(dto.seo_title !== undefined && { seo_title: dto.seo_title }),
+        ...(dto.seo_description !== undefined && { seo_description: dto.seo_description }),
         ...(dto.translator_note !== undefined && { translator_note: dto.translator_note }),
         ...(dto.status && { status: dto.status as never }),
       },

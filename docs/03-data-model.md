@@ -5,6 +5,13 @@
 
 ---
 
+## What changed in v2.6
+
+- `CategoryTranslation.short_description` added — plain-text one-line summary per locale; distinct from the TipTap `description` field; nullable
+- `CategoryTranslation.seo_title` added — locale-specific SEO `<title>` override (≤60 chars); nullable; falls back to `name` if absent
+- `CategoryTranslation.seo_description` added — locale-specific meta description (≤160 chars); nullable
+- `CreateCategoryDto` removes `name_en`/`slug_en` — category creation now sends only language-independent fields; translations are created separately via the upsert endpoint
+
 ## What changed in v2.5
 
 - `TagTranslation.description` added — TipTap JSON rich-text description per locale; same node schema as `CategoryTranslation.description`; nullable
@@ -327,7 +334,7 @@ Many-to-many with `Entry` via `EntryCategory(entry_id, category_id)`.
 
 ### CategoryTranslation
 
-All locale-specific content for a category — display name, public URL slug, and rich-text description. One row per locale per category.
+All locale-specific content for a category — display name, public URL slug, rich-text description, SEO fields, and a short plain-text summary. One row per locale per category.
 
 | Field | Type | Constraints | Notes |
 |---|---|---|---|
@@ -336,7 +343,10 @@ All locale-specific content for a category — display name, public URL slug, an
 | `locale` | string | BCP-47 | e.g. `pl`, `de`, `no`, `fr`, `en` |
 | `slug` | string | | Locale-specific public URL slug, e.g. `sciegi` for Polish, `stitches` for English. Used by middleware for URL resolution. |
 | `name` | string | | Display name in this locale, e.g. `Stitches`, `Ściegi`. |
+| `short_description` | string | nullable | Plain-text one-line summary — shown in category cards and search previews. Distinct from the rich-text `description`. |
 | `description` | jsonb | default `null` | TipTap JSON — editorial introduction to the category (e.g. "About lace knitting"). Same node schema as the `definition` content block. Nullable — not all categories have a description at launch. |
+| `seo_title` | string | nullable, ≤60 chars | Locale-specific `<title>` tag override for the category page. Falls back to `name` if absent. |
+| `seo_description` | string | nullable, ≤160 chars | Locale-specific meta description for the category page. |
 | `status` | enum | default `draft` | `draft` · `reviewed` · `published`. Mirrors `Translation.status`. |
 | `translator_note` | text | nullable | Editorial context visible to translators and reviewers. |
 | `created_at` | timestamptz | UTC | |

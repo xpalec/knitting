@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Users, Plus } from 'lucide-react';
+import { Users, Plus, Search } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { usersApi } from '@/lib/api/users';
@@ -11,6 +11,9 @@ import type { AdminUser, UserRole } from '@/lib/api/users';
 import { NewUserDialog } from '@/components/settings/new-user-dialog';
 import { useAuthStore } from '@/store/auth';
 import { cn } from '@/lib/utils';
+
+import { PageHeader } from '@/components/layout/page-header';
+import { Pagination } from '@/components/ui/pagination';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -38,9 +41,9 @@ import {
 const PAGE_SIZE = 20;
 
 const ROLE_BADGE_STYLES: Record<UserRole, string> = {
-  admin:    'bg-purple-50 text-purple-700 border-purple-200',
-  editor:   'bg-blue-50   text-blue-700   border-blue-200',
-  reviewer: 'bg-slate-100 text-slate-600  border-slate-200',
+  admin:    'bg-violet-200 text-violet-700',
+  editor:   'bg-blue-200   text-blue-700',
+  reviewer: 'bg-slate-200  text-slate-600',
 };
 
 // ---------------------------------------------------------------------------
@@ -93,15 +96,16 @@ export default function UsersPage() {
 
   const [newUserOpen, setNewUserOpen] = useState(false);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['users', { page, limit: PAGE_SIZE }],
-    queryFn: () => usersApi.listUsers({ page, limit: PAGE_SIZE }),
+    queryKey: ['users', { page, limit: pageSize }],
+    queryFn: () => usersApi.listUsers({ page, limit: pageSize }),
   });
 
   const users: AdminUser[] = data?.data ?? [];
   const total = data?.meta?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   const updateRoleMutation = useMutation({
     mutationFn: ({ id, role }: { id: string; role: UserRole }) =>
@@ -116,13 +120,15 @@ export default function UsersPage() {
   return (
     <div className="space-y-6">
       {/* Page header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-slate-800">Users</h1>
-        <Button onClick={() => setNewUserOpen(true)}>
+      <PageHeader
+        title="Users"
+        description="Manage admin users and their roles"
+      >
+        <Button onClick={() => setNewUserOpen(true)} className="gap-2 bg-violet-600 hover:bg-violet-700 text-white">
           <Plus size={16} aria-hidden="true" />
-          New User
+          Add
         </Button>
-      </div>
+      </PageHeader>
 
       {/* Table */}
       <Card>
@@ -177,7 +183,7 @@ export default function UsersPage() {
                         </Select>
                         <span
                           className={cn(
-                            'inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium capitalize',
+                            'inline-flex items-center justify-center rounded-lg px-4 py-1 text-xs font-semibold capitalize min-w-[72px]',
                             ROLE_BADGE_STYLES[user.role],
                           )}
                         >
@@ -199,28 +205,15 @@ export default function UsersPage() {
         </CardContent>
       </Card>
 
-      {/* Pagination — always rendered */}
-      <div className="flex items-center justify-between px-2 py-3">
-        <p className="text-sm text-slate-500">Page {page} of {totalPages}</p>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setPage((p) => p - 1)}
-            disabled={page <= 1}
-          >
-            Previous
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setPage((p) => p + 1)}
-            disabled={page >= totalPages}
-          >
-            Next
-          </Button>
-        </div>
-      </div>
+      {/* Pagination */}
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        total={total}
+        pageSize={pageSize}
+        onPageChange={setPage}
+        onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
+      />
 
       {/* New User dialog */}
       <NewUserDialog

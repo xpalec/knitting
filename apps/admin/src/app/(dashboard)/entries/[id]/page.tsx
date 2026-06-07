@@ -57,14 +57,18 @@ const BLOCK_TYPE_OPTIONS = ['definition', 'technique', 'media', 'callout', 'rela
 // ---------------------------------------------------------------------------
 
 function StatusBadge({ status }: { status: EntryStatus }) {
-  const styles: Record<EntryStatus, string> = {
-    draft: 'bg-slate-100 text-slate-600 border-slate-200',
-    review: 'bg-yellow-50 text-yellow-700 border-yellow-200',
-    published: 'bg-green-50 text-green-700 border-green-200',
-    deprecated: 'bg-red-50 text-red-700 border-red-200',
+  const colors: Record<EntryStatus, { bg: string; color: string }> = {
+    draft:      { bg: '#F1F5F9', color: '#64748B' },
+    review:     { bg: '#FEF9C3', color: '#A16207' },
+    published:  { bg: '#EAF6F0', color: '#63A48B' },
+    deprecated: { bg: '#FEE2E2', color: '#DC2626' },
   };
+  const { bg, color } = colors[status];
   return (
-    <span className={cn('inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium capitalize', styles[status])}>
+    <span
+      className="inline-flex items-center justify-center rounded-lg px-4 py-1 text-xs font-semibold capitalize min-w-[72px]"
+      style={{ backgroundColor: bg, color }}
+    >
       {status}
     </span>
   );
@@ -319,17 +323,20 @@ function LocaleForm({
     onError: () => toast.error('Failed to save translation'),
   });
 
-  const translationStatusStyles: Record<string, string> = {
-    draft: 'bg-slate-100 text-slate-600 border-slate-200',
-    reviewed: 'bg-yellow-50 text-yellow-700 border-yellow-200',
-    published: 'bg-green-50 text-green-700 border-green-200',
+  const translationStatusStyles: Record<string, { bg: string; color: string }> = {
+    draft:     { bg: '#F1F5F9', color: '#64748B' },
+    reviewed:  { bg: '#FEF9C3', color: '#A16207' },
+    published: { bg: '#EAF6F0', color: '#63A48B' },
   };
 
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-2">
         <span className="text-sm text-slate-600">Translation status:</span>
-        <span className={cn('inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium capitalize', translationStatusStyles[translation.status] ?? 'bg-slate-100 text-slate-600')}>
+        <span
+          className="inline-flex items-center justify-center rounded-lg px-4 py-1 text-xs font-semibold capitalize min-w-[72px]"
+          style={translationStatusStyles[translation.status] ?? { backgroundColor: '#F1F5F9', color: '#64748B' }}
+        >
           {translation.status}
         </span>
       </div>

@@ -1,5 +1,6 @@
 'use client';
 
+import { PageHeader } from '@/components/layout/page-header';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -42,7 +43,7 @@ function StatCard({
   href,
   linkLabel,
   loading,
-  iconColor = 'text-blue-600',
+  iconColor = 'text-violet-600',
 }: StatCardProps) {
   return (
     <Card>
@@ -62,7 +63,7 @@ function StatCard({
         {href && linkLabel && (
           <Link
             href={href}
-            className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors"
+            className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-violet-600 hover:text-violet-700 transition-colors"
           >
             {linkLabel}
             <ArrowRight size={12} aria-hidden="true" />
@@ -87,17 +88,17 @@ const STATUS_CONFIG: { [key: string]: StatusConfig | undefined } = {
   pending: {
     label: 'Pending',
     icon: Clock,
-    className: 'bg-yellow-50 text-yellow-700 border-yellow-200',
+    className: 'bg-yellow-200 text-yellow-700',
   },
   approved: {
     label: 'Approved',
     icon: CheckCircle2,
-    className: 'bg-green-50 text-green-700 border-green-200',
+    className: 'bg-green-200 text-green-700',
   },
   rejected: {
     label: 'Rejected',
     icon: XCircle,
-    className: 'bg-red-50 text-red-700 border-red-200',
+    className: 'bg-red-200 text-red-700',
   },
 };
 
@@ -108,7 +109,7 @@ function StatusBadge({ status }: { status: string }) {
   const Icon = config.icon;
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${config.className}`}
+      className={`inline-flex items-center gap-1 rounded-lg px-4 py-1 text-xs font-semibold ${config.className}`}
     >
       <Icon size={11} aria-hidden="true" />
       {config.label}
@@ -137,11 +138,10 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* Page header */}
-      <div>
-        <h1 className="text-2xl font-semibold text-slate-800">Dashboard</h1>
-        <p className="text-sm text-slate-500 mt-1">Overview of the encyclopedia content</p>
-      </div>
+      <PageHeader
+        title="Dashboard"
+        description="Overview of the encyclopedia content"
+      />
 
       {/* Stats grid */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -153,7 +153,7 @@ export default function DashboardPage() {
           href="/entries"
           linkLabel="View all"
           loading={loadingStats}
-          iconColor="text-blue-600"
+          iconColor="text-violet-600"
         />
         <StatCard
           title="Pending Submissions"

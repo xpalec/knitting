@@ -3,9 +3,9 @@
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -13,56 +13,26 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type { CategoryType, CategoryStatus } from '@/lib/api/categories';
-
-// ---------------------------------------------------------------------------
-// Slug helper
-// ---------------------------------------------------------------------------
-
-/**
- * Converts an arbitrary string into a URL-safe slug.
- * Steps: lowercase → trim → remove non-alphanumeric/non-space chars →
- *        replace whitespace runs with a single hyphen → strip leading/trailing hyphens.
- *
- * Examples:
- *   "Basic Stitches"   → "basic-stitches"
- *   "  Hello World!  " → "hello-world"
- */
-export function toSlug(value: string): string {
-  return value
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9\s]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-export interface CategoryFormValues {
-  name: string;
-  slug: string;
-  type: CategoryType | '';
-  icon: string;
-  sort_order: number;
-  cover_image_url: string;
-  status: CategoryStatus;
-}
-
-interface CategoryFormProps {
-  defaultValues?: Partial<CategoryFormValues>;
-  onSubmit: (values: CategoryFormValues) => void | Promise<void>;
-  isSubmitting?: boolean;
-  submitLabel?: string;
-  slugError?: string;
-  onCancel?: () => void;
-}
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { RichTextEditor } from '@/components/ui/rich-text-editor';
+import { Save, Trash2, X, Upload } from 'lucide-react';
+import type { CategoryType, CategoryStatus, TranslationStatus, AdminCategory } from '@/lib/api/categories';
+import { APP_COLORS, APP_COLOR_LIST, colorSlotFromBg } from '@/lib/colors';
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
+
+export const SUPPORTED_LOCALES = ['en', 'pl', 'fr', 'de', 'no'] as const;
+export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
+
+const LOCALE_LABELS: Record<SupportedLocale, string> = {
+  en: 'English',
+  pl: 'Polish',
+  fr: 'French',
+  de: 'German',
+  no: 'Norwegian',
+};
 
 const TYPE_OPTIONS: { value: CategoryType; label: string }[] = [
   { value: 'entry', label: 'Entry' },
@@ -75,211 +45,542 @@ const STATUS_OPTIONS: { value: CategoryStatus; label: string }[] = [
   { value: 'published', label: 'Published' },
 ];
 
+// Color palette — sourced from central lib/colors.ts
+// The bg hex is what gets stored on the Category record.
+export const CATEGORY_COLOR_PALETTE = APP_COLOR_LIST.map((c) => c.bg) as string[];
+
+const NO_PARENT = '__none__';
+const SEO_TITLE_MAX = 60;
+const SEO_DESC_MAX = 160;
+
 // ---------------------------------------------------------------------------
-// Component
+// Slug helper
+// ---------------------------------------------------------------------------
+
+export function toSlug(value: string): string {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+// ---------------------------------------------------------------------------
+// Helper: is a locale tab "translated" (has a name filled in)
+// ---------------------------------------------------------------------------
+
+function isLocaleTranslated(state: LocaleTabState): boolean {
+  return state.name.trim().length > 0;
+}
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+export interface LocaleTabState {
+  name: string;
+  slug: string;
+  slugManuallyEdited: boolean;
+  short_description: string;
+  description: unknown | null; // TipTap JSON or null
+  seo_title: string;
+  seo_description: string;
+  status: TranslationStatus;
+}
+
+export interface CategoryFormValues {
+  // Language-independent
+  type: CategoryType | '';
+  parent_id: string | null;
+  color: string;
+  status: CategoryStatus;
+  // Per-locale
+  locales: Record<SupportedLocale, LocaleTabState>;
+}
+
+interface CategoryFormProps {
+  defaultValues?: Partial<CategoryFormValues>;
+  parentCategories?: AdminCategory[];
+  isLoadingParents?: boolean;
+  onSubmit: (values: CategoryFormValues) => void | Promise<void>;
+  isSubmitting?: boolean;
+  slugErrors?: Partial<Record<SupportedLocale, string>>;
+  onCancel?: () => void;
+  onDelete?: () => void;
+  /** Header title — the category name displayed below the action buttons */
+  title?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Default locale tab state
+// ---------------------------------------------------------------------------
+
+function defaultLocaleTab(): LocaleTabState {
+  return {
+    name: '',
+    slug: '',
+    slugManuallyEdited: false,
+    short_description: '',
+    description: null,
+    seo_title: '',
+    seo_description: '',
+    status: 'draft',
+  };
+}
+
+function buildDefaultLocales(
+  partial?: Partial<CategoryFormValues>,
+): Record<SupportedLocale, LocaleTabState> {
+  const defaults: Partial<Record<SupportedLocale, LocaleTabState>> = partial?.locales ?? {};
+  const result = {} as Record<SupportedLocale, LocaleTabState>;
+  for (const locale of SUPPORTED_LOCALES) {
+    const existing = defaults[locale];
+    result[locale] = {
+      ...defaultLocaleTab(),
+      ...(existing ?? {}),
+      slugManuallyEdited: Boolean(existing?.slug),
+    };
+  }
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Helper — display name for parent category option
+// ---------------------------------------------------------------------------
+
+function getCategoryDisplayName(cat: AdminCategory): string {
+  const en = cat.translations.find((t) => t.locale === 'en');
+  return en?.name ?? cat.id;
+}
+
+// ---------------------------------------------------------------------------
+// Color picker — rounded-rectangle swatches
+// ---------------------------------------------------------------------------
+
+interface ColorPickerProps {
+  value: string;
+  onChange: (color: string) => void;
+  disabled?: boolean;
+}
+
+function ColorPicker({ value, onChange, disabled }: ColorPickerProps) {
+  return (
+    <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Category color">
+      {APP_COLOR_LIST.map((slot) => {
+        const isSelected = colorSlotFromBg(value).bg === slot.bg;
+        return (
+          <button
+            key={slot.bg}
+            type="button"
+            disabled={disabled}
+            onClick={() => onChange(slot.bg)}
+            aria-label={slot.label}
+            aria-checked={isSelected}
+            role="radio"
+            title={slot.label}
+            className={cn(
+              'h-7 w-10 rounded-md border-2 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500',
+              isSelected
+                ? 'border-slate-600 scale-105 shadow-sm'
+                : 'border-transparent hover:border-slate-300',
+              disabled && 'opacity-40 cursor-not-allowed',
+            )}
+            style={{ backgroundColor: slot.bg }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Locale tab content (left column)
+// ---------------------------------------------------------------------------
+
+interface LocaleTabProps {
+  locale: SupportedLocale;
+  state: LocaleTabState;
+  onChange: (locale: SupportedLocale, patch: Partial<LocaleTabState>) => void;
+  isSubmitting: boolean;
+  slugError?: string;
+}
+
+function LocaleTabContent({ locale, state, onChange, isSubmitting, slugError }: LocaleTabProps) {
+  function handleNameChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const newName = e.target.value;
+    const patch: Partial<LocaleTabState> = { name: newName };
+    if (!state.slugManuallyEdited) {
+      patch.slug = toSlug(newName);
+    }
+    onChange(locale, patch);
+  }
+
+  function handleSlugChange(e: React.ChangeEvent<HTMLInputElement>) {
+    onChange(locale, { slug: e.target.value, slugManuallyEdited: true });
+  }
+
+  return (
+    <div className="space-y-4 pt-4">
+      {/* Card 1: Name + Slug + Short description */}
+      <div className="rounded-lg border border-slate-200 bg-white p-5 space-y-4">
+        {/* Name + Slug side by side */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <Label htmlFor={`name-${locale}`}>
+              Name <span className="text-red-500">*</span>
+            </Label>
+            <Input
+              id={`name-${locale}`}
+              placeholder="Enter category name"
+              value={state.name}
+              onChange={handleNameChange}
+              disabled={isSubmitting}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor={`slug-${locale}`}>
+              Slug <span className="text-red-500">*</span>
+            </Label>
+            <Input
+              id={`slug-${locale}`}
+              placeholder="stockinette-stitch"
+              value={state.slug}
+              onChange={handleSlugChange}
+              disabled={isSubmitting}
+              className={cn('font-mono text-slate-400 text-sm', slugError && 'border-red-400')}
+            />
+            {slugError ? (
+              <p className="text-xs text-red-500">{slugError}</p>
+            ) : (
+              <p className="text-xs text-slate-400">Used in URLs and it&apos;s autogenerated</p>
+            )}
+          </div>
+        </div>
+
+        {/* Short description */}
+        <div className="space-y-1.5">
+          <Label htmlFor={`short-desc-${locale}`}>
+            Short description <span className="text-red-500">*</span>
+          </Label>
+          <Textarea
+            id={`short-desc-${locale}`}
+            placeholder="Write short description"
+            value={state.short_description}
+            onChange={(e) => onChange(locale, { short_description: e.target.value })}
+            disabled={isSubmitting}
+            rows={3}
+            className="resize-none"
+          />
+        </div>
+      </div>
+
+      {/* Card 2: Description (TipTap) */}
+      <div className="rounded-lg border border-slate-200 bg-white p-5 space-y-3">
+        <Label>
+          Description <span className="text-red-500">*</span>
+        </Label>
+        <RichTextEditor
+          value={state.description}
+          onChange={(json) => onChange(locale, { description: json })}
+          placeholder="Write description"
+          disabled={isSubmitting}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main form component
 // ---------------------------------------------------------------------------
 
 export function CategoryForm({
   defaultValues,
+  parentCategories = [],
+  isLoadingParents = false,
   onSubmit,
   isSubmitting = false,
-  submitLabel = 'Save',
-  slugError,
+  slugErrors = {},
   onCancel,
+  onDelete,
+  title,
 }: CategoryFormProps) {
-  // When a slug is pre-populated (edit mode) we treat it as manually set so
-  // the auto-generation does not overwrite it.
-  const [slugManuallyEdited, setSlugManuallyEdited] = useState(
-    () => Boolean(defaultValues?.slug),
+  const [type, setType] = useState<CategoryType | ''>(defaultValues?.type ?? '');
+  const [parentId, setParentId] = useState<string | null>(defaultValues?.parent_id ?? null);
+  const [color, setColor] = useState<string>(
+    defaultValues?.color ?? APP_COLORS.violet.bg,
+  );
+  const [status, setStatus] = useState<CategoryStatus>(defaultValues?.status ?? 'draft');
+  const [locales, setLocales] = useState<Record<SupportedLocale, LocaleTabState>>(
+    () => buildDefaultLocales(defaultValues),
   );
 
-  const [name, setName] = useState(defaultValues?.name ?? '');
-  const [slug, setSlug] = useState(defaultValues?.slug ?? '');
-  const [type, setType] = useState<CategoryType | ''>(defaultValues?.type ?? '');
-  const [icon, setIcon] = useState(defaultValues?.icon ?? '');
-  const [sortOrder, setSortOrder] = useState(defaultValues?.sort_order ?? 0);
-  const [coverImageUrl, setCoverImageUrl] = useState(defaultValues?.cover_image_url ?? '');
-  const [status, setStatus] = useState<CategoryStatus>(defaultValues?.status ?? 'draft');
+  const isSubmitDisabled = isSubmitting || !locales.en.name.trim() || !type;
 
-  // -------------------------------------------------------------------------
-  // Submit guard
-  // -------------------------------------------------------------------------
-
-  const isSubmitDisabled = isSubmitting || !name.trim() || !type;
-
-  // -------------------------------------------------------------------------
-  // Handlers
-  // -------------------------------------------------------------------------
-
-  function handleNameChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const newName = e.target.value;
-    setName(newName);
-    if (!slugManuallyEdited) {
-      setSlug(toSlug(newName));
-    }
+  function handleLocaleChange(locale: SupportedLocale, patch: Partial<LocaleTabState>) {
+    setLocales((prev) => ({
+      ...prev,
+      [locale]: { ...prev[locale], ...patch },
+    }));
   }
 
-  function handleSlugChange(e: React.ChangeEvent<HTMLInputElement>) {
-    setSlugManuallyEdited(true);
-    setSlug(e.target.value);
+  function buildValues(overrideStatus?: CategoryStatus): CategoryFormValues {
+    return {
+      type: type as CategoryType,
+      parent_id: parentId,
+      color,
+      status: overrideStatus ?? status,
+      locales,
+    };
+  }
+
+  function handleSave(e: React.MouseEvent) {
+    e.preventDefault();
+    if (isSubmitDisabled) return;
+    onSubmit(buildValues());
   }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (isSubmitDisabled) return;
-    onSubmit({
-      name,
-      slug,
-      type: type as CategoryType,
-      icon,
-      sort_order: sortOrder,
-      cover_image_url: coverImageUrl,
-      status,
-    });
+    onSubmit(buildValues());
   }
 
-  // -------------------------------------------------------------------------
-  // Render
-  // -------------------------------------------------------------------------
+  const displayTitle = title ?? (locales.en.name.trim() || 'New category');
 
   return (
     <form onSubmit={handleSubmit} noValidate>
-      <Card>
-        <CardContent className="space-y-6 pt-6">
-          {/* Name */}
-          <div className="space-y-1.5">
-            <Label htmlFor="category-name">
-              Name <span className="text-red-500">*</span>
-            </Label>
-            <Input
-              id="category-name"
-              placeholder="e.g. Knitting Techniques"
-              value={name}
-              onChange={handleNameChange}
-              disabled={isSubmitting}
-            />
+      {/* ── Title + action buttons row ──────────────────────────────────── */}
+      <div className="mb-5 flex items-center justify-between">
+        <h1 className="text-2xl font-semibold text-slate-800">{displayTitle}</h1>
+
+        <div className="flex items-center gap-2">
+          {/* Status pill */}
+          <div className={cn(
+            'flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium border select-none',
+            status === 'published'
+              ? 'bg-green-50 text-green-700 border-green-200'
+              : 'bg-amber-50 text-amber-700 border-amber-200',
+          )}>
+            <span className={cn(
+              'h-1.5 w-1.5 rounded-full',
+              status === 'published' ? 'bg-green-500' : 'bg-amber-500',
+            )} />
+            {status === 'published' ? 'Published' : 'Draft'}
           </div>
 
-          {/* Slug */}
-          <div className="space-y-1.5">
-            <Label htmlFor="category-slug">
-              Slug <span className="text-red-500">*</span>
-            </Label>
-            <Input
-              id="category-slug"
-              placeholder="e.g. knitting-techniques"
-              value={slug}
-              onChange={handleSlugChange}
-              disabled={isSubmitting}
-              className={cn(slugError && 'border-red-400')}
-            />
-            {slugError ? (
-              <p className="text-xs text-red-500">{slugError}</p>
-            ) : (
-              <p className="text-xs text-slate-400">
-                Lowercase letters, numbers, and hyphens only.
-              </p>
-            )}
-          </div>
+          {/* Import — always present, muted */}
+          <Button
+            variant="outline"
+            type="button"
+            disabled
+            className="gap-2 text-slate-400 border-slate-200"
+          >
+            <Upload size={15} aria-hidden="true" />
+            Import
+          </Button>
 
-          {/* Type */}
-          <div className="space-y-1.5">
-            <Label htmlFor="category-type">
-              Type <span className="text-red-500">*</span>
-            </Label>
-            <Select
-              value={type}
-              onValueChange={(v) => setType(v as CategoryType)}
+          {/* Delete — only shown when onDelete is provided */}
+          {onDelete && (
+            <Button
+              variant="outline"
+              type="button"
+              onClick={onDelete}
               disabled={isSubmitting}
+              className="gap-2 text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300"
             >
-              <SelectTrigger id="category-type">
-                <SelectValue placeholder="Select a type…" />
-              </SelectTrigger>
-              <SelectContent>
-                {TYPE_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+              <Trash2 size={15} aria-hidden="true" />
+              Delete
+            </Button>
+          )}
 
-          {/* Icon */}
-          <div className="space-y-1.5">
-            <Label htmlFor="category-icon">Icon</Label>
-            <Input
-              id="category-icon"
-              placeholder="e.g. scissors"
-              value={icon}
-              onChange={(e) => setIcon(e.target.value)}
-              disabled={isSubmitting}
-            />
-          </div>
-
-          {/* Sort Order */}
-          <div className="space-y-1.5">
-            <Label htmlFor="category-sort-order">Sort Order</Label>
-            <Input
-              id="category-sort-order"
-              type="number"
-              placeholder="0"
-              value={sortOrder}
-              onChange={(e) => setSortOrder(Number(e.target.value))}
-              disabled={isSubmitting}
-            />
-          </div>
-
-          {/* Cover Image URL */}
-          <div className="space-y-1.5">
-            <Label htmlFor="category-cover-image-url">Cover Image URL</Label>
-            <Input
-              id="category-cover-image-url"
-              placeholder="https://example.com/image.jpg"
-              value={coverImageUrl}
-              onChange={(e) => setCoverImageUrl(e.target.value)}
-              disabled={isSubmitting}
-            />
-          </div>
-
-          {/* Status */}
-          <div className="space-y-1.5">
-            <Label htmlFor="category-status">Status</Label>
-            <Select
-              value={status}
-              onValueChange={(v) => setStatus(v as CategoryStatus)}
-              disabled={isSubmitting}
-            >
-              <SelectTrigger id="category-status">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {STATUS_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-
-        <CardFooter className="flex justify-end gap-3 border-t pt-4">
+          {/* Cancel */}
           {onCancel && (
             <Button
               variant="outline"
               type="button"
               onClick={onCancel}
               disabled={isSubmitting}
+              className="gap-2"
             >
+              <X size={15} aria-hidden="true" />
               Cancel
             </Button>
           )}
-          <Button type="submit" disabled={isSubmitDisabled}>
-            {isSubmitting ? 'Saving…' : submitLabel}
+
+          {/* Save */}
+          <Button
+            type="button"
+            onClick={handleSave}
+            disabled={isSubmitDisabled}
+            className="gap-2 bg-violet-600 hover:bg-violet-700 text-white"
+          >
+            <Save size={15} aria-hidden="true" />
+            {isSubmitting ? 'Saving…' : 'Save'}
           </Button>
-        </CardFooter>
-      </Card>
+        </div>
+      </div>
+
+      {/* ── Two-column layout ────────────────────────────────────────────── */}
+      <div className="flex gap-5 items-start">
+
+        {/* ── Left: language tabs ─────────────────────────────────────── */}
+        <div className="flex-1 min-w-0">
+          <Tabs defaultValue="en">
+            {/* Tab triggers — language name only, with translation dot indicator */}
+            <TabsList variant="line" className="w-full justify-start">
+              {SUPPORTED_LOCALES.map((locale) => {
+                const translated = isLocaleTranslated(locales[locale]);
+                return (
+                  <TabsTrigger key={locale} value={locale} variant="line" className="gap-1.5 items-center">
+                    {/* Dot: green when translated, transparent placeholder when not */}
+                    <span
+                      className={cn(
+                        'h-1.5 w-1.5 rounded-full shrink-0 transition-colors',
+                        translated ? 'bg-green-500' : 'bg-transparent',
+                      )}
+                      aria-hidden="true"
+                    />
+                    <span>{LOCALE_LABELS[locale]}</span>
+                  </TabsTrigger>
+                );
+              })}
+            </TabsList>
+
+            {SUPPORTED_LOCALES.map((locale) => (
+              <TabsContent key={locale} value={locale}>
+                <LocaleTabContent
+                  locale={locale}
+                  state={locales[locale]}
+                  onChange={handleLocaleChange}
+                  isSubmitting={isSubmitting}
+                  slugError={slugErrors[locale]}
+                />
+              </TabsContent>
+            ))}
+          </Tabs>
+        </div>
+
+        {/* ── Right: sidebar ──────────────────────────────────────────── */}
+        <div className="w-[260px] shrink-0 space-y-4">
+
+          {/* Card: Status + Type + Parent + Color */}
+          <div className="rounded-lg border border-slate-200 bg-white p-4 space-y-4">
+            {/* Status */}
+            <div className="space-y-1.5">
+              <Label htmlFor="category-status">
+                Status <span className="text-red-500">*</span>
+              </Label>
+              <Select
+                value={status}
+                onValueChange={(v) => setStatus(v as CategoryStatus)}
+                disabled={isSubmitting}
+              >
+                <SelectTrigger id="category-status">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {STATUS_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Type */}
+            <div className="space-y-1.5">
+              <Label htmlFor="category-type">
+                Type <span className="text-red-500">*</span>
+              </Label>
+              <Select
+                value={type}
+                onValueChange={(v) => setType(v as CategoryType)}
+                disabled={isSubmitting}
+              >
+                <SelectTrigger id="category-type">
+                  <SelectValue placeholder="Select a type…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {TYPE_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Parent category */}
+            <div className="space-y-1.5">
+              <Label htmlFor="category-parent">
+                Parent category <span className="text-red-500">*</span>
+              </Label>
+              <Select
+                value={parentId ?? NO_PARENT}
+                onValueChange={(v) => setParentId(v === NO_PARENT ? null : v)}
+                disabled={isSubmitting || isLoadingParents}
+              >
+                <SelectTrigger id="category-parent">
+                  <SelectValue placeholder={isLoadingParents ? 'Loading…' : 'Top Level Category'} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_PARENT}>Top Level Category</SelectItem>
+                  {parentCategories.map((cat) => (
+                    <SelectItem key={cat.id} value={cat.id}>
+                      {getCategoryDisplayName(cat)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Color */}
+            <div className="space-y-2">
+              <Label>
+                Color <span className="text-red-500">*</span>
+              </Label>
+              <ColorPicker value={color} onChange={setColor} disabled={isSubmitting} />
+            </div>
+          </div>
+
+          {/* Card: SEO section */}
+          <div className="rounded-lg border border-slate-200 bg-white p-4 space-y-4">
+            <p className="text-sm font-semibold text-slate-700">SEO</p>
+
+            <div className="space-y-1.5">
+              <p className="text-xs text-slate-400">SEO Title</p>
+              <Input
+                id="seo-title-en"
+                placeholder="SEO title"
+                value={locales.en.seo_title}
+                onChange={(e) => handleLocaleChange('en', {
+                  seo_title: e.target.value.slice(0, SEO_TITLE_MAX),
+                })}
+                disabled={isSubmitting}
+                className="text-sm"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <p className="text-xs text-slate-400">SEO Description</p>
+              <Textarea
+                id="seo-desc-en"
+                placeholder="SEO description"
+                value={locales.en.seo_description}
+                onChange={(e) => handleLocaleChange('en', {
+                  seo_description: e.target.value.slice(0, SEO_DESC_MAX),
+                })}
+                disabled={isSubmitting}
+                rows={5}
+                className="text-sm resize-none"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
     </form>
   );
 }

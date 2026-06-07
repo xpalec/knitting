@@ -11,14 +11,15 @@ import {
   MoreHorizontal,
   Pencil,
   Trash2,
-  ChevronLeft,
-  ChevronRight,
   FileX,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { articlesApi } from '@/lib/api/articles';
 import type { Article } from '@/lib/api/articles';
+
+import { PageHeader } from '@/components/layout/page-header';
+import { Pagination } from '@/components/ui/pagination';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -46,7 +47,7 @@ import {
 // Constants
 // ---------------------------------------------------------------------------
 
-const PAGE_SIZE = 20;
+const DEFAULT_PAGE_SIZE = 10;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -93,6 +94,7 @@ export default function ArticlesPage() {
   const [searchInput, setSearchInput] = useState('');
   const [q, setQ] = useState('');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [deleteTarget, setDeleteTarget] = useState<Article | null>(null);
 
   // Debounce search — reset page on query change
@@ -106,7 +108,7 @@ export default function ArticlesPage() {
 
   const params = {
     page,
-    limit: PAGE_SIZE,
+    limit: pageSize,
     ...(q ? { q } : {}),
   };
 
@@ -117,7 +119,7 @@ export default function ArticlesPage() {
 
   const articles = data?.data ?? [];
   const total = data?.meta?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => articlesApi.deleteArticle(id),
@@ -134,19 +136,28 @@ export default function ArticlesPage() {
   return (
     <div className="space-y-6">
       {/* Page header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-slate-800">Articles</h1>
-        <Button asChild>
+      <PageHeader
+        title="Articles"
+        description="Manage long-form editorial content and tutorials"
+      >
+        <Button
+          variant="outline"
+          className="gap-2 border-violet-500 text-violet-600 hover:bg-violet-50 hover:text-violet-700"
+        >
+          <Search size={16} aria-hidden="true" />
+          Filters
+        </Button>
+        <Button asChild className="gap-2 bg-violet-600 hover:bg-violet-700 text-white">
           <Link href="/articles/new">
             <Plus size={16} aria-hidden="true" />
-            New Article
+            Add
           </Link>
         </Button>
-      </div>
+      </PageHeader>
 
       {/* Stats row */}
       <div className="flex items-center gap-2 text-sm text-slate-600">
-        <div className="rounded-lg bg-slate-50 p-2 text-blue-600">
+        <div className="rounded-lg bg-violet-50 p-2 text-violet-600">
           <FileText size={18} aria-hidden="true" />
         </div>
         {isLoading ? (
@@ -284,33 +295,15 @@ export default function ArticlesPage() {
         </CardContent>
       </Card>
 
-      {/* Pagination — always rendered */}
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-slate-500">
-          Page <span className="font-medium text-slate-700">{page}</span> of{' '}
-          <span className="font-medium text-slate-700">{totalPages}</span>
-        </p>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page <= 1}
-          >
-            <ChevronLeft size={16} aria-hidden="true" />
-            Prev
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page >= totalPages}
-          >
-            Next
-            <ChevronRight size={16} aria-hidden="true" />
-          </Button>
-        </div>
-      </div>
+      {/* Pagination */}
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        total={total}
+        pageSize={pageSize}
+        onPageChange={setPage}
+        onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
+      />
 
       {/* Delete confirm dialog */}
       <ConfirmDialog
