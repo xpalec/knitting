@@ -180,14 +180,34 @@ function ColorPicker({ value, onChange, disabled }: ColorPickerProps) {
             role="radio"
             title={slot.label}
             className={cn(
-              'h-7 w-10 rounded-md border-2 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500',
+              'relative h-8 w-8 rounded-md border-2 cursor-pointer transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500',
               isSelected
-                ? 'border-slate-600 scale-105 shadow-sm'
+                ? 'scale-105 shadow-sm'
                 : 'border-transparent hover:border-slate-300',
               disabled && 'opacity-40 cursor-not-allowed',
             )}
-            style={{ backgroundColor: slot.bg }}
-          />
+            style={{
+              backgroundColor: slot.bg,
+              borderColor: isSelected ? slot.fg : undefined,
+            }}
+          >
+            {isSelected && (
+              <svg
+                viewBox="0 0 12 12"
+                fill="none"
+                className="absolute inset-0 m-auto h-3 w-3"
+                aria-hidden="true"
+              >
+                <path
+                  d="M2 6l3 3 5-5"
+                  stroke={slot.fg}
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            )}
+          </button>
         );
       })}
     </div>
@@ -463,7 +483,7 @@ export function CategoryForm({
         </div>
 
         {/* ── Right: sidebar ──────────────────────────────────────────── */}
-        <div className="w-[260px] shrink-0 space-y-4">
+        <div className="w-[380px] shrink-0 space-y-4">
 
           {/* Card: Status + Type + Parent + Color */}
           <div className="rounded-lg border border-slate-200 bg-white p-4 space-y-4">

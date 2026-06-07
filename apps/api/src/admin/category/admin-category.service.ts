@@ -100,6 +100,8 @@ export class AdminCategoryService {
         cover_image_url: c.cover_image_url,
         translations: c.translations,
         children_count: c._count.children,
+        created_at: c.created_at,
+        updated_at: c.updated_at,
       })),
       meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
     };

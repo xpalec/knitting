@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -23,6 +23,7 @@ import { toast } from 'sonner';
 import { adminCategoriesApi } from '@/lib/api/categories';
 import type { AdminCategory, AdminCategoryListParams, CategoryType, CategoryStatus } from '@/lib/api/categories';
 import { ApiError } from '@/lib/api/client';
+import { colorSlotFromBg } from '@/lib/colors';
 
 import { CategoryTypeBadge } from '@/components/categories/category-type-badge';
 import { CategoryStatusBadge } from '@/components/categories/category-status-badge';
@@ -34,7 +35,7 @@ import { LanguageBadges } from '@/components/ui/language-badges';
 import { SortableTableHead } from '@/components/ui/sortable-table-head';
 import type { SortDirection } from '@/components/ui/sortable-table-head';
 
-import { Pagination } from '@/components/ui/pagination';
+import { Pagination, TableFooterBar } from '@/components/ui/pagination';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -51,6 +52,7 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
@@ -114,8 +116,11 @@ function getTranslationLocales(cat: AdminCategory): string[] {
   return (cat.translations ?? []).map((t) => t.locale);
 }
 
-function formatDateWithAuthor(iso: string): { date: string; author: string } {
-  const date = new Date(iso).toLocaleDateString('en-US', {
+function formatDateWithAuthor(iso: string | null | undefined): { date: string; author: string } {
+  if (!iso) return { date: '—', author: 'Anna Nowak' };
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return { date: '—', author: 'Anna Nowak' };
+  const date = d.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -143,6 +148,166 @@ function SkeletonRows() {
           <TableCell><Skeleton className="h-8 w-8 rounded" /></TableCell>
         </TableRow>
       ))}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Color dot
+// ---------------------------------------------------------------------------
+
+function CategoryColorDot({ color }: { color: string | null }) {
+  const slot = colorSlotFromBg(color);
+  return (
+    <span
+      className="inline-flex h-6 w-6 shrink-0 rounded-md"
+      style={{ backgroundColor: slot.bg }}
+      aria-hidden="true"
+    />
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Sub-category rows (rendered inline below their parent)
+// ---------------------------------------------------------------------------
+
+interface SubCategoryRowsProps {
+  parentId: string;
+  allCategories: AdminCategory[];
+  onNavigate: (id: string) => void;
+  onDelete: (cat: AdminCategory) => void;
+  selectedIds: Set<string>;
+  onToggleSelect: (id: string) => void;
+}
+
+function SubCategoryRows({
+  parentId,
+  allCategories,
+  onNavigate,
+  onDelete,
+  selectedIds,
+  onToggleSelect,
+}: SubCategoryRowsProps) {
+  const children = allCategories.filter((c) => c.parent_id === parentId);
+
+  if (children.length === 0) {
+    return (
+      <TableRow>
+        <TableCell colSpan={9}>
+          <div className="pl-14 py-2 text-xs text-slate-400 italic">No subcategories</div>
+        </TableCell>
+      </TableRow>
+    );
+  }
+
+  return (
+    <>
+      {children.map((child) => {
+        const { date, author } = formatDateWithAuthor(child.updated_at);
+        return (
+          <TableRow
+            key={child.id}
+            className="cursor-pointer bg-slate-50/60 hover:bg-slate-100/60"
+            onClick={() => onNavigate(child.id)}
+            data-selected={selectedIds.has(child.id) || undefined}
+          >
+            {/* Checkbox */}
+            <TableCell onClick={(e) => e.stopPropagation()}>
+              <Checkbox
+                checked={selectedIds.has(child.id)}
+                onChange={() => onToggleSelect(child.id)}
+                aria-label={`Select ${getCategoryName(child)}`}
+              />
+            </TableCell>
+
+            {/* Title — indented with a left connector */}
+            <TableCell className="max-w-[260px]">
+              <div className="flex items-center gap-2 pl-7">
+                {/* Connector line */}
+                <span className="relative flex h-6 w-4 shrink-0">
+                  <span className="absolute left-0 top-0 h-full w-px bg-slate-200" />
+                  <span className="absolute left-0 top-1/2 h-px w-full bg-slate-200" />
+                </span>
+                <CategoryColorDot color={child.color} />
+                <div className="min-w-0">
+                  <p className="font-medium text-slate-700 truncate text-sm">
+                    {getCategoryName(child)}
+                  </p>
+                  {getCategoryDescription(child) && (
+                    <p className="text-xs text-slate-400 truncate">
+                      {getCategoryDescription(child)}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </TableCell>
+
+            {/* Type */}
+            <TableCell>
+              <CategoryTypeBadge type={child.type} />
+            </TableCell>
+
+            {/* Parent — will be the parent name */}
+            <TableCell className="text-sm text-slate-500">
+              {getCategoryName(allCategories.find((c) => c.id === parentId)!)}
+            </TableCell>
+
+            {/* Entries count */}
+            <TableCell className="text-sm text-slate-700 font-medium text-center">
+              {child.entry_count}
+            </TableCell>
+
+            {/* Status */}
+            <TableCell>
+              <CategoryStatusBadge status={child.status} />
+            </TableCell>
+
+            {/* Updated */}
+            <TableCell className="whitespace-nowrap">
+              <p className="text-sm text-slate-700">{date}</p>
+              <p className="text-xs text-slate-400">by {author}</p>
+            </TableCell>
+
+            {/* Languages */}
+            <TableCell>
+              <LanguageBadges locales={getTranslationLocales(child)} />
+            </TableCell>
+
+            {/* Actions */}
+            <TableCell
+              onClick={(e) => e.stopPropagation()}
+              className="text-right"
+            >
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    aria-label="Row actions"
+                  >
+                    <MoreHorizontal size={16} aria-hidden="true" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => onNavigate(child.id)}>
+                    <Pencil size={14} aria-hidden="true" />
+                    Edit
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="text-red-600 focus:text-red-600"
+                    onClick={() => onDelete(child)}
+                  >
+                    <Trash2 size={14} aria-hidden="true" />
+                    Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </TableCell>
+          </TableRow>
+        );
+      })}
     </>
   );
 }
@@ -214,10 +379,10 @@ export default function CategoriesPage() {
   }
 
   function toggleSelectAll() {
-    if (selectedIds.size === categories.length) {
+    if (selectedIds.size === topLevelCategories.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(categories.map((c) => c.id)));
+      setSelectedIds(new Set(topLevelCategories.map((c) => c.id)));
     }
   }
 
@@ -238,49 +403,43 @@ export default function CategoriesPage() {
   // Effective type filter: tab overrides the dropdown when not "all"
   const effectiveType = activeTab !== 'all' ? activeTab : typeFilter;
 
-  // Build query params
-  const params: AdminCategoryListParams = {
-    page,
-    limit: pageSize,
-    ...(search ? { search } : {}),
-    ...(effectiveType !== 'all' ? { type: effectiveType } : {}),
-    ...(statusFilter !== 'all' ? { status: statusFilter } : {}),
-  };
-
-  const { data, isLoading } = useQuery({
-    queryKey: ['categories', params],
-    queryFn: () => adminCategoriesApi.listCategories(params),
-  });
-
-  const categories = data?.data ?? [];
-  const total = data?.meta?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-
-  // Summary query — independent of filters, always fetches all categories
-  const {
-    data: summaryData,
-    isLoading: summaryLoading,
-    isError: summaryError,
-  } = useQuery({
-    queryKey: ['categories-summary'],
+  // Single query — fetch all categories once, do filtering/pagination client-side.
+  // This avoids a second "summary" request just for stats and child lookups.
+  const { data: allData, isLoading } = useQuery({
+    queryKey: ['categories-all'],
     queryFn: () => adminCategoriesApi.listCategories({ limit: 1000 }),
   });
 
-  // Show toast on summary error (only once per error state)
-  useEffect(() => {
-    if (summaryError) {
-      toast.error('Failed to load category summary');
-    }
-  }, [summaryError]);
+  const allCats = allData?.data ?? [];
 
-  const summary = summaryData ? computeSummary(summaryData.data ?? []) : null;
+  // Apply active filters to the full list
+  const filteredCats = allCats.filter((c) => {
+    if (effectiveType !== 'all' && c.type !== effectiveType) return false;
+    if (statusFilter !== 'all' && c.status !== statusFilter) return false;
+    if (search) {
+      const name = getCategoryName(c).toLowerCase();
+      if (!name.includes(search.toLowerCase())) return false;
+    }
+    return true;
+  });
+
+  // Stats derived from the full unfiltered list
+  const summary = allData ? computeSummary(allCats) : null;
+
+  // Only top-level categories in the main rows
+  const topLevelFiltered = filteredCats.filter((c) => c.parent_id === null);
+
+  // Client-side pagination
+  const total = topLevelFiltered.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const topLevelCategories = topLevelFiltered.slice((page - 1) * pageSize, page * pageSize);
 
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: (id: string) => adminCategoriesApi.deleteCategory(id),
     onSuccess: () => {
       toast.success('Category deleted');
-      queryClient.invalidateQueries({ queryKey: ['categories'] });
+      queryClient.invalidateQueries({ queryKey: ['categories-all'] });
       setDeleteTarget(null);
     },
     onError: (err) => {
@@ -387,13 +546,11 @@ export default function CategoriesPage() {
           <div className="rounded-lg bg-violet-50 p-2 text-violet-600">
             <LayoutGrid size={18} aria-hidden="true" />
           </div>
-          {summaryLoading ? (
+          {isLoading ? (
             <Skeleton className="h-6 w-12" />
           ) : (
             <div>
-              <p className="text-xl font-bold text-slate-800">
-                {summaryError ? '—' : (summary?.total ?? '—')}
-              </p>
+              <p className="text-xl font-bold text-slate-800">{summary?.total ?? '—'}</p>
               <p className="text-xs text-slate-500">Total Categories</p>
             </div>
           )}
@@ -403,13 +560,11 @@ export default function CategoriesPage() {
           <div className="rounded-lg bg-green-50 p-2 text-green-600">
             <BookOpen size={18} aria-hidden="true" />
           </div>
-          {summaryLoading ? (
+          {isLoading ? (
             <Skeleton className="h-6 w-12" />
           ) : (
             <div>
-              <p className="text-xl font-bold text-slate-800">
-                {summaryError ? '—' : (summary?.entry ?? '—')}
-              </p>
+              <p className="text-xl font-bold text-slate-800">{summary?.entry ?? '—'}</p>
               <p className="text-xs text-slate-500">Entry categories</p>
             </div>
           )}
@@ -419,7 +574,7 @@ export default function CategoriesPage() {
           <div className="rounded-lg bg-amber-50 p-2 text-amber-600">
             <FileText size={18} aria-hidden="true" />
           </div>
-          {summaryLoading ? (
+          {isLoading ? (
             <Skeleton className="h-6 w-12" />
           ) : (
             <div>
@@ -466,8 +621,8 @@ export default function CategoriesPage() {
               <TableRow>
                 <TableHead className="w-10">
                   <Checkbox
-                    checked={categories.length > 0 && selectedIds.size === categories.length}
-                    indeterminate={selectedIds.size > 0 && selectedIds.size < categories.length}
+                    checked={topLevelCategories.length > 0 && selectedIds.size === topLevelCategories.length}
+                    indeterminate={selectedIds.size > 0 && selectedIds.size < topLevelCategories.length}
                     onChange={toggleSelectAll}
                     aria-label="Select all"
                   />
@@ -495,7 +650,7 @@ export default function CategoriesPage() {
             <TableBody>
               {isLoading ? (
                 <SkeletonRows />
-              ) : categories.length === 0 ? (
+              ) : topLevelCategories.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={9}>
                     <div className="flex flex-col items-center justify-center py-16 text-slate-400">
@@ -510,144 +665,165 @@ export default function CategoriesPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                categories.map((cat) => {
+                topLevelCategories.map((cat) => {
                   const { date, author } = formatDateWithAuthor(cat.updated_at);
                   const hasChildren = cat.children_count > 0;
                   const isExpanded = expandedIds.has(cat.id);
+                  // allCats already available from the single query above
 
                   return (
-                    <TableRow
-                      key={cat.id}
-                      className="cursor-pointer"
-                      onClick={() => router.push(`/categories/${cat.id}`)}
-                      data-selected={selectedIds.has(cat.id) || undefined}
-                    >
-                      {/* Checkbox */}
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        <Checkbox
-                          checked={selectedIds.has(cat.id)}
-                          onChange={() => toggleSelect(cat.id)}
-                          aria-label={`Select ${getCategoryName(cat)}`}
-                        />
-                      </TableCell>
-
-                      {/* Title with subtitle & expand toggle */}
-                      <TableCell className="max-w-[260px]">
-                        <div className="flex items-center gap-2">
-                          {hasChildren ? (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); toggleExpand(cat.id); }}
-                              className="p-0.5 rounded hover:bg-slate-100 transition-colors"
-                              aria-label={isExpanded ? 'Collapse' : 'Expand'}
-                            >
-                              {isExpanded ? (
-                                <ChevronUp size={14} className="text-slate-400" />
-                              ) : (
-                                <ChevronDown size={14} className="text-slate-400" />
-                              )}
-                            </button>
-                          ) : (
-                            <span className="w-5" />
-                          )}
-                          <div className="min-w-0">
-                            <p className="font-medium text-slate-700 truncate">
-                              {cat.icon != null && (
-                                <span className="mr-1.5" aria-hidden="true">{cat.icon}</span>
-                              )}
-                              {getCategoryName(cat)}
-                            </p>
-                            {getCategoryDescription(cat) && (
-                              <p className="text-xs text-slate-400 truncate">
-                                {getCategoryDescription(cat)}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </TableCell>
-
-                      {/* Type */}
-                      <TableCell>
-                        <CategoryTypeBadge type={cat.type} />
-                      </TableCell>
-
-                      {/* Parent */}
-                      <TableCell className="text-sm text-slate-500">
-                        {getParentName(cat, categories)}
-                      </TableCell>
-
-                      {/* Entries count */}
-                      <TableCell className="text-sm text-slate-700 font-medium text-center">
-                        {cat.entry_count}
-                      </TableCell>
-
-                      {/* Status */}
-                      <TableCell>
-                        <CategoryStatusBadge status={cat.status} />
-                      </TableCell>
-
-                      {/* Updated */}
-                      <TableCell className="whitespace-nowrap">
-                        <p className="text-sm text-slate-700">{date}</p>
-                        <p className="text-xs text-slate-400">by {author}</p>
-                      </TableCell>
-
-                      {/* Languages */}
-                      <TableCell>
-                        <LanguageBadges locales={getTranslationLocales(cat)} />
-                      </TableCell>
-
-                      {/* Actions */}
-                      <TableCell
-                        onClick={(e) => e.stopPropagation()}
-                        className="text-right"
+                    <React.Fragment key={cat.id}>
+                      <TableRow
+                        className="cursor-pointer"
+                        onClick={() => router.push(`/categories/${cat.id}`)}
+                        data-selected={selectedIds.has(cat.id) || undefined}
                       >
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              aria-label="Row actions"
-                            >
-                              <MoreHorizontal size={16} aria-hidden="true" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              onClick={() => router.push(`/categories/${cat.id}`)}
-                            >
-                              <Pencil size={14} aria-hidden="true" />
-                              Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              className="text-red-600 focus:text-red-600"
-                              onClick={() => setDeleteTarget(cat)}
-                            >
-                              <Trash2 size={14} aria-hidden="true" />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
+                        {/* Checkbox */}
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          <Checkbox
+                            checked={selectedIds.has(cat.id)}
+                            onChange={() => toggleSelect(cat.id)}
+                            aria-label={`Select ${getCategoryName(cat)}`}
+                          />
+                        </TableCell>
+
+                        {/* Title with color dot, subtitle & expand toggle */}
+                        <TableCell className="max-w-[260px]">
+                          <div className="flex items-center gap-2">
+                            {hasChildren ? (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); toggleExpand(cat.id); }}
+                                className="p-0.5 rounded hover:bg-slate-100 transition-colors shrink-0"
+                                aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                              >
+                                {isExpanded ? (
+                                  <ChevronUp size={14} className="text-slate-400" />
+                                ) : (
+                                  <ChevronDown size={14} className="text-slate-400" />
+                                )}
+                              </button>
+                            ) : (
+                              <span className="w-5 shrink-0" />
+                            )}
+                            <CategoryColorDot color={cat.color} />
+                            <div className="min-w-0">
+                              <p className="font-medium text-slate-700 truncate">
+                                {getCategoryName(cat)}
+                              </p>
+                              {getCategoryDescription(cat) && (
+                                <p className="text-xs text-slate-400 truncate">
+                                  {getCategoryDescription(cat)}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </TableCell>
+
+                        {/* Type */}
+                        <TableCell>
+                          <CategoryTypeBadge type={cat.type} />
+                        </TableCell>
+
+                        {/* Parent */}
+                        <TableCell className="text-sm text-slate-500">
+                          {getParentName(cat, allCats)}
+                        </TableCell>
+
+                        {/* Entries count */}
+                        <TableCell className="text-sm text-slate-700 font-medium text-center">
+                          {cat.entry_count}
+                        </TableCell>
+
+                        {/* Status */}
+                        <TableCell>
+                          <CategoryStatusBadge status={cat.status} />
+                        </TableCell>
+
+                        {/* Updated */}
+                        <TableCell className="whitespace-nowrap">
+                          <p className="text-sm text-slate-700">{date}</p>
+                          <p className="text-xs text-slate-400">by {author}</p>
+                        </TableCell>
+
+                        {/* Languages */}
+                        <TableCell>
+                          <LanguageBadges locales={getTranslationLocales(cat)} />
+                        </TableCell>
+
+                        {/* Actions */}
+                        <TableCell
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-right"
+                        >
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                aria-label="Row actions"
+                              >
+                                <MoreHorizontal size={16} aria-hidden="true" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                onClick={() => router.push(`/categories/${cat.id}`)}
+                              >
+                                <Pencil size={14} aria-hidden="true" />
+                                Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                className="text-red-600 focus:text-red-600"
+                                onClick={() => setDeleteTarget(cat)}
+                              >
+                                <Trash2 size={14} aria-hidden="true" />
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+
+                      {/* Subcategory rows — shown when parent is expanded */}
+                      {isExpanded && (
+                        <SubCategoryRows
+                          parentId={cat.id}
+                          allCategories={allCats}
+                          onNavigate={(id) => router.push(`/categories/${id}`)}
+                          onDelete={setDeleteTarget}
+                          selectedIds={selectedIds}
+                          onToggleSelect={toggleSelect}
+                        />
+                      )}
+                    </React.Fragment>
                   );
                 })
               )}
             </TableBody>
+            <TableFooter className="bg-white border-t border-slate-200">
+              <tr>
+                <td colSpan={9} className="p-0">
+                  <TableFooterBar
+                    selectedCount={selectedIds.size}
+                    pageSize={pageSize}
+                    onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
+                  />
+                </td>
+              </tr>
+            </TableFooter>
           </Table>
         </CardContent>
       </Card>
 
-      {/* Pagination */}
+      {/* Pagination — below the card */}
       <Pagination
         page={page}
         totalPages={totalPages}
         total={total}
         pageSize={pageSize}
-        selectedCount={selectedIds.size}
         onPageChange={setPage}
-        onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
       />
 
       {/* Delete confirm dialog */}

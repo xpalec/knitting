@@ -1,7 +1,7 @@
 'use client';
 
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 interface PaginationProps {
   page: number;
@@ -16,10 +16,15 @@ interface PaginationProps {
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
 /**
- * Full-featured pagination matching the design:
- * - Left: "X selected" + "1-10 of 140 items"
- * - Center/Right: Previous, numbered pages with ellipsis, Next
- * - Right: "Show N per page" dropdown
+ * Pagination matching the design:
+ *
+ * Inside the table card border (TableFooter bar):
+ *   Left:  "2 selected"
+ *   Right: "Show 10 ▾ per page"
+ *
+ * Below the card:
+ *   Left:  "1–10 of 140 items"
+ *   Right: ← Previous  1  [2]  3  …  Next →
  */
 export function Pagination({
   page,
@@ -33,115 +38,130 @@ export function Pagination({
   const start = Math.min((page - 1) * pageSize + 1, total);
   const end = Math.min(page * pageSize, total);
 
-  // Build page number array with ellipsis
   function getPageNumbers(): (number | 'ellipsis')[] {
     if (totalPages <= 7) {
       return Array.from({ length: totalPages }, (_, i) => i + 1);
     }
-
     const pages: (number | 'ellipsis')[] = [1];
-
-    if (page > 3) {
-      pages.push('ellipsis');
-    }
-
+    if (page > 3) pages.push('ellipsis');
     const rangeStart = Math.max(2, page - 1);
     const rangeEnd = Math.min(totalPages - 1, page + 1);
-
-    for (let i = rangeStart; i <= rangeEnd; i++) {
-      pages.push(i);
-    }
-
-    if (page < totalPages - 2) {
-      pages.push('ellipsis');
-    }
-
+    for (let i = rangeStart; i <= rangeEnd; i++) pages.push(i);
+    if (page < totalPages - 2) pages.push('ellipsis');
     pages.push(totalPages);
     return pages;
   }
 
   return (
-    <div className="flex items-center justify-between gap-4 flex-wrap">
-      {/* Left section: selected count + item range */}
-      <div className="flex items-center gap-4 text-sm text-slate-500">
-        {selectedCount > 0 && (
-          <span>
-            <span className="font-medium text-slate-700">{selectedCount}</span> selected
-          </span>
-        )}
-        <span>
-          {start}-{end} of <span className="font-medium text-slate-700">{total}</span> items
-        </span>
-      </div>
+    <div className="space-y-0">
+      {/* ── Row 1: inside the table card border ─────────────────────── */}
+      {/* This row is rendered as a TableFooter in the consuming component.
+          We expose it as a named export so the page can slot it in.      */}
 
-      {/* Right section: page navigation + page size */}
-      <div className="flex items-center gap-2">
-        {/* Previous */}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onPageChange(page - 1)}
-          disabled={page <= 1}
-          className="gap-1"
-        >
-          <ChevronLeft size={14} aria-hidden="true" />
-          Previous
-        </Button>
+      {/* ── Row 2: below the card — 3-column grid so page buttons are centered ── */}
+      <div className="grid grid-cols-3 items-center px-1 pt-3">
+        {/* Left: item range */}
+        <p className="text-sm text-slate-500">
+          {start}–{end} of{' '}
+          <span className="font-medium text-slate-700">{total}</span> items
+        </p>
 
-        {/* Page numbers */}
-        {getPageNumbers().map((item, idx) => {
-          if (item === 'ellipsis') {
+        {/* Center: page buttons */}
+        <div className="flex items-center justify-center gap-1">
+          <button
+            onClick={() => onPageChange(page - 1)}
+            disabled={page <= 1}
+            className="flex items-center gap-1 rounded-md px-2.5 py-1.5 text-sm text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            aria-label="Previous page"
+          >
+            <ChevronLeft size={14} aria-hidden="true" />
+            Previous
+          </button>
+
+          {getPageNumbers().map((item, idx) => {
+            if (item === 'ellipsis') {
+              return (
+                <span key={`e-${idx}`} className="px-1 text-slate-400 text-sm select-none">
+                  …
+                </span>
+              );
+            }
+            const isActive = item === page;
             return (
-              <span key={`ellipsis-${idx}`} className="px-1 text-slate-400 text-sm">
-                …
-              </span>
+              <button
+                key={item}
+                onClick={() => onPageChange(item)}
+                aria-current={isActive ? 'page' : undefined}
+                className={cn(
+                  'h-8 w-8 rounded-md text-sm font-medium transition-colors',
+                  isActive
+                    ? 'bg-violet-600 text-white'
+                    : 'text-slate-600 hover:bg-slate-100',
+                )}
+              >
+                {item}
+              </button>
             );
-          }
-          return (
-            <Button
-              key={item}
-              variant={item === page ? 'default' : 'outline'}
-              size="sm"
-              className="h-8 w-8 p-0"
-              onClick={() => onPageChange(item)}
-            >
-              {item}
-            </Button>
-          );
-        })}
+          })}
 
-        {/* Next */}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onPageChange(page + 1)}
-          disabled={page >= totalPages}
-          className="gap-1"
-        >
-          Next
-          <ChevronRight size={14} aria-hidden="true" />
-        </Button>
+          <button
+            onClick={() => onPageChange(page + 1)}
+            disabled={page >= totalPages}
+            className="flex items-center gap-1 rounded-md px-2.5 py-1.5 text-sm text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            aria-label="Next page"
+          >
+            Next
+            <ChevronRight size={14} aria-hidden="true" />
+          </button>
+        </div>
 
-        {/* Page size selector */}
-        {onPageSizeChange && (
-          <div className="flex items-center gap-1.5 ml-2 text-sm text-slate-500">
-            <span>Show</span>
-            <select
-              value={pageSize}
-              onChange={(e) => onPageSizeChange(Number(e.target.value))}
-              className="h-8 rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-1"
-              aria-label="Items per page"
-            >
-              {PAGE_SIZE_OPTIONS.map((size) => (
-                <option key={size} value={size}>
-                  {size}
-                </option>
-              ))}
-            </select>
-            <span>per page</span>
-          </div>
-        )}
+        {/* Right: intentionally empty to balance the grid */}
+        <div />
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// TableFooterBar — "2 selected | Show 10 ▾ per page" row inside the card
+// Used inside a <TableFooter> in the consuming page.
+// ---------------------------------------------------------------------------
+
+interface TableFooterBarProps {
+  selectedCount?: number;
+  pageSize: number;
+  onPageSizeChange?: (size: number) => void;
+}
+
+export function TableFooterBar({ selectedCount = 0, pageSize, onPageSizeChange }: TableFooterBarProps) {
+  return (
+    <div className="flex items-center justify-between px-4 py-3">
+      {/* Left: selected count */}
+      <p className="text-sm text-slate-500">
+        {selectedCount > 0 ? (
+          <><span className="font-medium text-slate-700">{selectedCount}</span> selected</>
+        ) : (
+          <span className="invisible">0 selected</span> // keeps height stable
+        )}
+      </p>
+
+      {/* Right: page size */}
+      {onPageSizeChange && (
+        <div className="flex items-center gap-1.5 text-sm text-slate-500">
+          <span>Show</span>
+          <select
+            value={pageSize}
+            onChange={(e) => onPageSizeChange(Number(e.target.value))}
+            className="h-7 rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-1"
+            aria-label="Items per page"
+          >
+            {PAGE_SIZE_OPTIONS.map((size) => (
+              <option key={size} value={size}>{size}</option>
+            ))}
+          </select>
+          <span>per page</span>
+        </div>
+      )}
     </div>
   );
 }
