@@ -1,5 +1,7 @@
 import { apiGet, apiGetWithMeta, apiPost, apiPut, apiPatch, apiDelete } from "./client";
 import type { ApiResponse } from "./client";
+import { adminCategoriesApi } from "./categories";
+import type { AdminCategory } from "./categories";
 
 export type EntryStatus = "draft" | "review" | "published" | "deprecated";
 export type SkillLevel = "beginner" | "intermediate" | "advanced" | "expert";
@@ -35,6 +37,11 @@ export interface Entry {
   // Present on list responses (flat projection from the API)
   term?: string | null;
   slug?: string | null;
+  // NEW flat projections (list endpoint only)
+  category_id?: string | null;
+  category_name?: string | null;
+  tags?: Array<{ id: string; name: string }>;
+  languages?: string[];
   // Present on single-entry responses
   translations: Translation[];
   content_blocks: ContentBlock[];
@@ -50,6 +57,9 @@ export interface ListEntriesParams {
   skillLevel?: SkillLevel;
   originLanguage?: string;
   q?: string;
+  // NEW filter params
+  type?: EntryType;
+  category_id?: string;
 }
 
 export interface CreateEntryPayload {
@@ -78,6 +88,10 @@ export interface UpdateTranslationPayload {
   definition_short?: string;
   status?: "draft" | "reviewed" | "published";
   content_blocks?: ContentBlock[];
+}
+
+export function listEntryCategories(): Promise<ApiResponse<AdminCategory[]>> {
+  return adminCategoriesApi.listCategories({ type: 'entry', limit: 200 });
 }
 
 export const entriesApi = {

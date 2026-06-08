@@ -89,6 +89,8 @@ enum UserRole {
 
 model Entry {
   id              String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// Encyclopaedic classification: stitch, technique, tool, tradition, yarn_weight
+  type            String?
   /// BCP-47 code of the tradition this entry originates from: en, pl, no, de, fr
   origin_language String
   status          EntryStatus @default(draft)

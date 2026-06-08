@@ -38,12 +38,19 @@ export class AdminEntryController {
   findAll(
     @Query('page') page = '1',
     @Query('limit') limit = '20',
+    @Query('q') q?: string,
     @Query('search') search?: string,
+    @Query('type') type?: string,
+    @Query('category_id') categoryId?: string,
+    @Query('status') status?: string,
   ) {
     return this.adminEntryService.findAll(
       parseInt(page, 10),
       parseInt(limit, 10),
-      search,
+      q ?? search,
+      type,
+      categoryId,
+      status,
     );
   }
 

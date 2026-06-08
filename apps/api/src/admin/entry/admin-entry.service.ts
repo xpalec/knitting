@@ -26,6 +26,7 @@ export class AdminEntryService {
 
     const entry = await this.prisma.entry.create({
       data: {
+        type: dto.entry_type,
         origin_language: dto.origin_language,
         status: 'draft',
         metadata: { skill_level: dto.skill_level ?? null },
@@ -47,12 +48,57 @@ export class AdminEntryService {
     return { data: entry };
   }
 
-  async findAll(page: number, limit: number, search?: string) {
+  private static readonly VALID_ENTRY_TYPES = [
+    'stitch',
+    'technique',
+    'tool',
+    'tradition',
+    'yarn_weight',
+  ] as const;
+
+  private static readonly VALID_ENTRY_STATUSES = [
+    'draft',
+    'review',
+    'published',
+    'deprecated',
+  ] as const;
+
+  async findAll(
+    page: number,
+    limit: number,
+    search?: string,
+    type?: string,
+    categoryId?: string,
+    status?: string,
+  ) {
+    if (type !== undefined && !AdminEntryService.VALID_ENTRY_TYPES.includes(type as never)) {
+      throw new BadRequestException(
+        `Invalid type '${type}'. Must be one of: ${AdminEntryService.VALID_ENTRY_TYPES.join(', ')}`,
+      );
+    }
+
+    if (status !== undefined && !AdminEntryService.VALID_ENTRY_STATUSES.includes(status as never)) {
+      throw new BadRequestException(
+        `Invalid status '${status}'. Must be one of: ${AdminEntryService.VALID_ENTRY_STATUSES.join(', ')}`,
+      );
+    }
+
     const skip = (page - 1) * limit;
     const where: Record<string, unknown> = {};
     if (search) {
       where['translations'] = {
         some: { locale: 'en', term: { contains: search, mode: 'insensitive' } },
+      };
+    }
+    if (type) {
+      where['type'] = type;
+    }
+    if (status) {
+      where['status'] = status;
+    }
+    if (categoryId) {
+      where['categories'] = {
+        some: { category_id: categoryId },
       };
     }
 
@@ -69,8 +115,22 @@ export class AdminEntryService {
               category: {
                 include: {
                   translations: {
-                    where: { locale: 'en', status: 'published' },
-                    select: { slug: true },
+                    where: { locale: 'en' },
+                    select: { name: true },
+                  },
+                },
+              },
+            },
+          },
+          tags: {
+            include: {
+              tag: {
+                select: {
+                  id: true,
+                  slug: true,
+                  translations: {
+                    where: { locale: 'en' },
+                    select: { name: true },
                   },
                 },
               },
@@ -89,14 +149,34 @@ export class AdminEntryService {
         const enTranslation = e.translations.find((t) => t.locale === 'en');
         const firstTranslation = e.translations[0];
         const displayTranslation = enTranslation ?? firstTranslation;
+
+        // Category: use first assigned category's EN translation name
+        const firstCategory = e.categories[0]?.category ?? null;
+        const category_id = firstCategory?.id ?? null;
+        const category_name =
+          firstCategory?.translations[0]?.name ?? null;
+
+        // Tags: EN translation name with fallback to tag.slug
+        const tags = e.tags.map((et) => ({
+          id: et.tag.id,
+          name: et.tag.translations[0]?.name ?? et.tag.slug,
+        }));
+
+        // Languages: distinct locale values from Translation rows
+        const languages = [...new Set(e.translations.map((t) => t.locale))];
+
         return {
           id: e.id,
+          type: e.type ?? null,
           origin_language: e.origin_language,
           status: e.status,
           metadata: e.metadata,
           term: displayTranslation?.term ?? null,
           slug: displayTranslation?.slug ?? null,
-          categories: e.categories.map((ec) => ec.category.translations[0]?.slug ?? ec.category.id),
+          category_id,
+          category_name,
+          tags,
+          languages,
           created_at: e.created_at,
           updated_at: e.updated_at,
         };

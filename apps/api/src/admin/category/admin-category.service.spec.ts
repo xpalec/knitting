@@ -59,7 +59,6 @@ describe('AdminCategoryService', () => {
 
   describe('create', () => {
     it('creates a top-level category with an English translation', async () => {
-      mockPrisma.categoryTranslation.findUnique.mockResolvedValue(null);
       mockPrisma.category.create.mockResolvedValue({
         id: 'cat-1',
         type: 'entry',
@@ -72,7 +71,7 @@ describe('AdminCategoryService', () => {
         translations: [{ locale: 'en', name: 'Stitches', slug: 'stitches', status: 'draft' }],
       });
 
-      const result = await service.create({ type: 'entry', name_en: 'Stitches', slug_en: 'stitches' });
+      const result = await service.create({ type: 'entry' });
 
       expect(result.data.translations[0].name).toBe('Stitches');
       expect(mockPrisma.category.create).toHaveBeenCalledWith(
@@ -84,7 +83,6 @@ describe('AdminCategoryService', () => {
     });
 
     it('persists the type field when creating a category', async () => {
-      mockPrisma.categoryTranslation.findUnique.mockResolvedValue(null);
       mockPrisma.category.create.mockResolvedValue({
         id: 'cat-2',
         type: 'abbreviation',
@@ -97,7 +95,7 @@ describe('AdminCategoryService', () => {
         translations: [{ locale: 'en', name: 'Abbrevs', slug: 'abbrevs', status: 'draft' }],
       });
 
-      const result = await service.create({ type: 'abbreviation', name_en: 'Abbrevs', slug_en: 'abbrevs' });
+      const result = await service.create({ type: 'abbreviation' });
 
       expect(result.data.type).toBe('abbreviation');
       expect(mockPrisma.category.create).toHaveBeenCalledWith(
@@ -107,20 +105,11 @@ describe('AdminCategoryService', () => {
       );
     });
 
-    it('throws ConflictException when English slug already exists', async () => {
-      mockPrisma.categoryTranslation.findUnique.mockResolvedValue({ id: 'existing' });
-
-      await expect(
-        service.create({ type: 'entry', name_en: 'Stitches', slug_en: 'stitches' }),
-      ).rejects.toThrow(ConflictException);
-    });
-
     it('throws NotFoundException when parent_id does not exist', async () => {
-      mockPrisma.categoryTranslation.findUnique.mockResolvedValue(null);
       mockPrisma.category.findUnique.mockResolvedValue(null); // parent not found
 
       await expect(
-        service.create({ type: 'entry', name_en: 'Lace', slug_en: 'lace', parent_id: 'bad-uuid' }),
+        service.create({ type: 'entry', parent_id: 'bad-uuid' }),
       ).rejects.toThrow(NotFoundException);
     });
   });

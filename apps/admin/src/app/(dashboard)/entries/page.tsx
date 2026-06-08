@@ -1,30 +1,38 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   BookOpen,
+  CheckCircle,
+  FileText,
+  Clock,
   Search,
   Plus,
+  Upload,
   MoreHorizontal,
   Pencil,
   RefreshCw,
   Trash2,
   FileX,
+  ChevronDown,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { cn } from '@/lib/utils';
-import { entriesApi } from '@/lib/api/entries';
-import type { EntryStatus, SkillLevel, Entry } from '@/lib/api/entries';
+import { entriesApi, listEntryCategories } from '@/lib/api/entries';
+import type { EntryStatus, EntryType, Entry } from '@/lib/api/entries';
+import { SortableTableHead } from '@/components/ui/sortable-table-head';
+import type { SortDirection } from '@/components/ui/sortable-table-head';
+import { EntryTypeBadge } from '@/components/entries/entry-type-badge';
+import { LanguageBadges } from '@/components/ui/language-badges';
 
 import { PageHeader } from '@/components/layout/page-header';
-import { Pagination } from '@/components/ui/pagination';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Pagination, TableFooterBar } from '@/components/ui/pagination';
 
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -50,10 +58,12 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table,
   TableBody,
   TableCell,
+  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
@@ -73,22 +83,27 @@ const STATUS_OPTIONS: { value: EntryStatus | 'all'; label: string }[] = [
   { value: 'deprecated', label: 'Deprecated' },
 ];
 
-const SKILL_OPTIONS: { value: SkillLevel | 'all'; label: string }[] = [
-  { value: 'all', label: 'All Levels' },
-  { value: 'beginner', label: 'Beginner' },
-  { value: 'intermediate', label: 'Intermediate' },
-  { value: 'advanced', label: 'Advanced' },
-  { value: 'expert', label: 'Expert' },
-];
+// ---------------------------------------------------------------------------
+// Status tab mappings
+// ---------------------------------------------------------------------------
 
-const LANGUAGE_OPTIONS: { value: string }[] = [
-  { value: 'all' },
-  { value: 'en' },
-  { value: 'pl' },
-  { value: 'no' },
-  { value: 'de' },
-  { value: 'fr' },
-];
+// Maps the current statusFilter to the Tabs value prop.
+// 'deprecated' has no dedicated tab → use 'deprecated' so no TabsTrigger matches.
+const STATUS_TO_TAB: Record<EntryStatus | 'all', string> = {
+  all:        'all',
+  published:  'published',
+  draft:      'draft',
+  review:     'needs-review',
+  deprecated: 'deprecated',
+};
+
+// Maps a tab value back to the EntryStatus filter value.
+const TAB_TO_STATUS: Record<string, EntryStatus | 'all'> = {
+  'all':          'all',
+  'published':    'published',
+  'draft':        'draft',
+  'needs-review': 'review',
+};
 
 // ---------------------------------------------------------------------------
 // Badge helpers
@@ -101,34 +116,21 @@ const STATUS_COLORS: Record<EntryStatus, { bg: string; color: string }> = {
   deprecated: { bg: '#FEE2E2', color: '#DC2626' },
 };
 
-const SKILL_COLORS: Record<SkillLevel, { bg: string; color: string }> = {
-  beginner:     { bg: '#EAF6F0', color: '#63A48B' },
-  intermediate: { bg: '#DBEAFE', color: '#1D4ED8' },
-  advanced:     { bg: '#FFEDD5', color: '#C2410C' },
-  expert:       { bg: '#FEE2E2', color: '#DC2626' },
+const STATUS_LABELS: Record<EntryStatus, string> = {
+  draft:      'Draft',
+  review:     'Needs review',
+  published:  'Published',
+  deprecated: 'Deprecated',
 };
 
 function StatusBadge({ status }: { status: EntryStatus }) {
   const { bg, color } = STATUS_COLORS[status];
   return (
     <span
-      className="inline-flex items-center justify-center rounded-lg px-4 py-1 text-xs font-semibold capitalize min-w-[72px]"
+      className="inline-flex items-center justify-center rounded-lg px-4 py-1 text-xs font-semibold min-w-[72px]"
       style={{ backgroundColor: bg, color }}
     >
-      {status}
-    </span>
-  );
-}
-
-function SkillBadge({ level }: { level?: SkillLevel }) {
-  if (!level) return <span className="text-slate-400 text-xs">—</span>;
-  const { bg, color } = SKILL_COLORS[level];
-  return (
-    <span
-      className="inline-flex items-center justify-center rounded-lg px-4 py-1 text-xs font-semibold capitalize min-w-[72px]"
-      style={{ backgroundColor: bg, color }}
-    >
-      {level}
+      {STATUS_LABELS[status]}
     </span>
   );
 }
@@ -207,24 +209,24 @@ function SkeletonRows() {
     <>
       {Array.from({ length: 5 }).map((_, i) => (
         <TableRow key={i}>
-          <TableCell>
-            <Skeleton className="h-4 w-36" />
-          </TableCell>
-          <TableCell>
-            <Skeleton className="h-4 w-8" />
-          </TableCell>
-          <TableCell>
-            <Skeleton className="h-5 w-20 rounded-full" />
-          </TableCell>
-          <TableCell>
-            <Skeleton className="h-5 w-20 rounded-full" />
-          </TableCell>
-          <TableCell>
-            <Skeleton className="h-4 w-24" />
-          </TableCell>
-          <TableCell>
-            <Skeleton className="h-8 w-8 rounded" />
-          </TableCell>
+          {/* Checkbox */}
+          <TableCell><Skeleton className="h-4 w-4" /></TableCell>
+          {/* Title */}
+          <TableCell><Skeleton className="h-4 w-36" /></TableCell>
+          {/* Type */}
+          <TableCell><Skeleton className="h-5 w-20 rounded-full" /></TableCell>
+          {/* Category */}
+          <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+          {/* Tags */}
+          <TableCell><div className="flex gap-1"><Skeleton className="h-5 w-12 rounded-full" /><Skeleton className="h-5 w-12 rounded-full" /></div></TableCell>
+          {/* Status */}
+          <TableCell><Skeleton className="h-5 w-20 rounded-full" /></TableCell>
+          {/* Updated */}
+          <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+          {/* Languages */}
+          <TableCell><div className="flex gap-1"><Skeleton className="h-5 w-5 rounded-full" /><Skeleton className="h-5 w-5 rounded-full" /></div></TableCell>
+          {/* Actions */}
+          <TableCell><Skeleton className="h-8 w-8 rounded" /></TableCell>
         </TableRow>
       ))}
     </>
@@ -235,23 +237,60 @@ function SkeletonRows() {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function getEnTerm(entry: Entry): string {
-  // List responses return a flat `term` field; detail responses include translations[]
-  if (entry.term) return entry.term;
-  const translations = entry.translations ?? [];
-  return (
-    translations.find((t) => t.locale === 'en')?.term ??
-    translations[0]?.term ??
-    '—'
-  );
-}
-
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-GB', {
-    day: 'numeric',
+  return new Date(iso).toLocaleDateString('en-US', {
     month: 'short',
+    day: 'numeric',
     year: 'numeric',
   });
+}
+
+// ---------------------------------------------------------------------------
+// Bulk Action Bar — shown when selectedIds.size > 0 (replaces TableFooterBar)
+// ---------------------------------------------------------------------------
+
+interface BulkActionBarProps {
+  selectedIds: Set<string>;
+  onStatusChange: (status: EntryStatus) => void;
+  onDeleteOpen: () => void;
+}
+
+function BulkActionBar({ selectedIds, onStatusChange, onDeleteOpen }: BulkActionBarProps) {
+  return (
+    <div className="flex items-center justify-between px-4 py-3">
+      <p className="text-sm font-medium text-slate-700">
+        {selectedIds.size} selected
+      </p>
+      <div className="flex items-center gap-2">
+        {/* Bulk status dropdown */}
+        <Select onValueChange={(v) => onStatusChange(v as EntryStatus)}>
+          <SelectTrigger className="w-[160px] h-8 text-sm">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="draft">Draft</SelectItem>
+            <SelectItem value="review">Needs review</SelectItem>
+            <SelectItem value="published">Published</SelectItem>
+            <SelectItem value="deprecated">Deprecated</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {/* Actions dropdown */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="gap-1">
+              Actions <ChevronDown size={14} aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={onDeleteOpen}>
+              Delete selected
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -265,15 +304,69 @@ export default function EntriesPage() {
   // Filter state
   const [searchInput, setSearchInput] = useState('');
   const [q, setQ] = useState('');
-  const [status, setStatus] = useState<EntryStatus | 'all'>('all');
-  const [skillLevel, setSkillLevel] = useState<SkillLevel | 'all'>('all');
-  const [originLanguage, setOriginLanguage] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<EntryStatus | 'all'>('all');
+  const [typeFilter, setTypeFilter] = useState<EntryType | 'all'>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string | 'all'>('all');
+
+  // Pagination
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
-  // Dialog state
+  // Sort
+  const [sortKey, setSortKey] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>(null);
+
+  function handleSort(key: string) {
+    if (sortKey === key) {
+      // Cycle: asc → desc → unsorted
+      if (sortDirection === 'asc') setSortDirection('desc');
+      else if (sortDirection === 'desc') { setSortKey(null); setSortDirection(null); }
+      else setSortDirection('asc');
+    } else {
+      setSortKey(key);
+      setSortDirection('asc');
+    }
+  }
+
+  // Selection
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // Dialogs
   const [deleteTarget, setDeleteTarget] = useState<Entry | null>(null);
   const [statusTarget, setStatusTarget] = useState<Entry | null>(null);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+
+  // Ref for hidden file input (Import)
+  const importInputRef = useRef<HTMLInputElement>(null);
+
+  // Import handlers
+  function handleImportClick() {
+    importInputRef.current?.click();
+  }
+
+  function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const MAX_SIZE = 5 * 1024 * 1024; // 5 MB = 5,242,880 bytes
+    const isCSV = file.name.toLowerCase().endsWith('.csv');
+
+    if (!isCSV) {
+      toast.error('Invalid file type. Please select a .csv file.');
+      if (importInputRef.current) importInputRef.current.value = '';
+      return;
+    }
+
+    if (file.size > MAX_SIZE) {
+      toast.error('File is too large. Maximum allowed size is 5 MB.');
+      if (importInputRef.current) importInputRef.current.value = '';
+      return;
+    }
+
+    // File is valid — actual import API not yet implemented
+    toast.success('File ready for import');
+    if (importInputRef.current) importInputRef.current.value = '';
+  }
 
   // Debounce search
   useEffect(() => {
@@ -284,25 +377,72 @@ export default function EntriesPage() {
     return () => clearTimeout(timer);
   }, [searchInput]);
 
-  // Reset page when filters change
-  useEffect(() => {
-    setPage(1);
-  }, [status, skillLevel, originLanguage]);
+  // Summary queries — four parallel queries, independent of filter state
+  const summaryQueries = useQueries({
+    queries: [
+      {
+        queryKey: ['entries-summary', 'all'] as const,
+        queryFn: () => entriesApi.listEntries({ limit: 1 }),
+      },
+      {
+        queryKey: ['entries-summary', 'published'] as const,
+        queryFn: () => entriesApi.listEntries({ limit: 1, status: 'published' as EntryStatus }),
+      },
+      {
+        queryKey: ['entries-summary', 'draft'] as const,
+        queryFn: () => entriesApi.listEntries({ limit: 1, status: 'draft' as EntryStatus }),
+      },
+      {
+        queryKey: ['entries-summary', 'review'] as const,
+        queryFn: () => entriesApi.listEntries({ limit: 1, status: 'review' as EntryStatus }),
+      },
+    ],
+  });
 
-  // Build query params
+  // Build list query params from all active filter/page/sort values
   const params = {
     page,
     limit: pageSize,
     ...(q ? { q } : {}),
-    ...(status !== 'all' ? { status } : {}),
-    ...(skillLevel !== 'all' ? { skillLevel } : {}),
-    ...(originLanguage !== 'all' ? { originLanguage } : {}),
+    ...(statusFilter !== 'all' ? { status: statusFilter } : {}),
+    ...(typeFilter !== 'all' ? { type: typeFilter } : {}),
+    ...(categoryFilter !== 'all' ? { category_id: categoryFilter } : {}),
   };
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['entries', params],
     queryFn: () => entriesApi.listEntries(params),
   });
+
+  // Categories query for the filter dropdown
+  const { data: catData, isLoading: catLoading, isError: catError } = useQuery({
+    queryKey: ['entry-categories'],
+    queryFn: () => listEntryCategories(),
+  });
+
+  // Error handling for entries list
+  useEffect(() => {
+    if (isError) toast.error('Failed to load entries');
+  }, [isError]);
+
+  // Error handling for categories dropdown
+  useEffect(() => {
+    if (catError) toast.error('Failed to load categories');
+  }, [catError]);
+
+  // Derived: at least one filter is active
+  const hasFilters =
+    searchInput.trim().length > 0 ||
+    typeFilter !== 'all' ||
+    categoryFilter !== 'all';
+
+  function clearFilters() {
+    setSearchInput('');
+    setTypeFilter('all');
+    setCategoryFilter('all');
+    setStatusFilter('all');
+    setPage(1);
+  }
 
   const entries = data?.data ?? [];
   const total = data?.meta?.total ?? 0;
@@ -314,6 +454,7 @@ export default function EntriesPage() {
     onSuccess: () => {
       toast.success('Entry deleted');
       queryClient.invalidateQueries({ queryKey: ['entries'] });
+      queryClient.invalidateQueries({ queryKey: ['entries-summary'] });
       setDeleteTarget(null);
     },
     onError: () => {
@@ -328,6 +469,7 @@ export default function EntriesPage() {
     onSuccess: () => {
       toast.success('Status updated');
       queryClient.invalidateQueries({ queryKey: ['entries'] });
+      queryClient.invalidateQueries({ queryKey: ['entries-summary'] });
       setStatusTarget(null);
     },
     onError: () => {
@@ -335,13 +477,82 @@ export default function EntriesPage() {
     },
   });
 
+  // Bulk status handler
+  async function handleBulkStatus(status: EntryStatus) {
+    const ids = [...selectedIds];
+    const results = await Promise.allSettled(
+      ids.map((id) => entriesApi.updateEntryStatus(id, status))
+    );
+    const succeeded = results.filter((r) => r.status === 'fulfilled').length;
+    const failed = results.filter((r) => r.status === 'rejected').length;
+    const failedIds = ids.filter((_, i) => results[i]?.status === 'rejected');
+
+    if (succeeded > 0) {
+      toast.success(`${succeeded} entr${succeeded === 1 ? 'y' : 'ies'} updated`);
+    }
+    if (failed > 0) {
+      toast.error(`${failed} entr${failed === 1 ? 'y' : 'ies'} could not be updated`);
+    }
+
+    if (failed === 0) {
+      // All succeeded — clear selection and refresh
+      setSelectedIds(new Set());
+      queryClient.invalidateQueries({ queryKey: ['entries'] });
+      queryClient.invalidateQueries({ queryKey: ['entries-summary'] });
+    } else {
+      // Partial failure — keep only failed IDs in selection, refresh list
+      setSelectedIds(new Set(failedIds));
+      queryClient.invalidateQueries({ queryKey: ['entries'] });
+      queryClient.invalidateQueries({ queryKey: ['entries-summary'] });
+    }
+  }
+
+  // Bulk delete handler
+  async function handleBulkDelete() {
+    setBulkDeleteOpen(false);
+    const ids = [...selectedIds];
+    const results = await Promise.allSettled(
+      ids.map((id) => entriesApi.deleteEntry(id))
+    );
+    const succeeded = results.filter((r) => r.status === 'fulfilled').length;
+    const failed = results.filter((r) => r.status === 'rejected').length;
+    const failedIds = ids.filter((_, i) => results[i]?.status === 'rejected');
+
+    if (succeeded > 0) {
+      toast.success(`${succeeded} entr${succeeded === 1 ? 'y' : 'ies'} deleted`);
+    }
+    if (failed > 0) {
+      toast.error(`${failed} entr${failed === 1 ? 'y' : 'ies'} could not be deleted`);
+    }
+
+    if (failed === 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(failedIds));
+    }
+    queryClient.invalidateQueries({ queryKey: ['entries'] });
+    queryClient.invalidateQueries({ queryKey: ['entries-summary'] });
+  }
+
   return (
     <div className="space-y-6">
       {/* Page header */}
       <PageHeader
         title="Entries"
-        description="Manage encyclopedia entries, translations and content blocks"
+        description="Manage and organize encyclopaedia entries"
       >
+        <Button variant="outline" onClick={handleImportClick} className="gap-2">
+          <Upload size={16} aria-hidden="true" />
+          Import
+        </Button>
+        {/* Hidden file input for import */}
+        <input
+          ref={importInputRef}
+          type="file"
+          accept=".csv"
+          className="hidden"
+          onChange={handleFileSelected}
+        />
         <Button
           variant="outline"
           className="gap-2 border-violet-500 text-violet-600 hover:bg-violet-50 hover:text-violet-700"
@@ -357,93 +568,169 @@ export default function EntriesPage() {
         </Button>
       </PageHeader>
 
-      {/* Stats row */}
-      <div className="flex items-center gap-2 text-sm text-slate-600">
-        <div className="rounded-lg bg-violet-50 p-2 text-violet-600">
-          <BookOpen size={18} aria-hidden="true" />
+      {/* Summary stat cards */}
+      <div className="flex items-center gap-4">
+        {/* Total entries */}
+        <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-5 py-3">
+          <div className="rounded-lg bg-violet-50 p-2 text-violet-600">
+            <BookOpen size={18} aria-hidden="true" />
+          </div>
+          {summaryQueries[0].isLoading ? (
+            <Skeleton className="h-6 w-12" />
+          ) : (
+            <div>
+              <p className="text-xl font-bold text-slate-800">
+                {summaryQueries[0].isError ? '—' : (summaryQueries[0].data?.meta?.total ?? '—')}
+              </p>
+              <p className="text-xs text-slate-500">Total entries</p>
+            </div>
+          )}
         </div>
-        {isLoading ? (
-          <Skeleton className="h-4 w-28" />
-        ) : (
-          <span>
-            <span className="font-semibold text-slate-800">{total}</span>{' '}
-            {total === 1 ? 'Entry' : 'Entries'} total
-          </span>
-        )}
+
+        {/* Published */}
+        <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-5 py-3">
+          <div className="rounded-lg bg-green-50 p-2 text-green-600">
+            <CheckCircle size={18} aria-hidden="true" />
+          </div>
+          {summaryQueries[1].isLoading ? (
+            <Skeleton className="h-6 w-12" />
+          ) : (
+            <div>
+              <p className="text-xl font-bold text-slate-800">
+                {summaryQueries[1].isError ? '—' : (summaryQueries[1].data?.meta?.total ?? '—')}
+              </p>
+              <p className="text-xs text-slate-500">Published</p>
+            </div>
+          )}
+        </div>
+
+        {/* Drafts */}
+        <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-5 py-3">
+          <div className="rounded-lg bg-slate-100 p-2 text-slate-600">
+            <FileText size={18} aria-hidden="true" />
+          </div>
+          {summaryQueries[2].isLoading ? (
+            <Skeleton className="h-6 w-12" />
+          ) : (
+            <div>
+              <p className="text-xl font-bold text-slate-800">
+                {summaryQueries[2].isError ? '—' : (summaryQueries[2].data?.meta?.total ?? '—')}
+              </p>
+              <p className="text-xs text-slate-500">Drafts</p>
+            </div>
+          )}
+        </div>
+
+        {/* Needs review */}
+        <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-5 py-3">
+          <div className="rounded-lg bg-amber-50 p-2 text-amber-600">
+            <Clock size={18} aria-hidden="true" />
+          </div>
+          {summaryQueries[3].isLoading ? (
+            <Skeleton className="h-6 w-12" />
+          ) : (
+            <div>
+              <p className="text-xl font-bold text-slate-800">
+                {summaryQueries[3].isError ? '—' : (summaryQueries[3].data?.meta?.total ?? '—')}
+              </p>
+              <p className="text-xs text-slate-500">Needs review</p>
+            </div>
+          )}
+        </div>
       </div>
 
+      {/* Status tabs */}
+      <Tabs
+        value={STATUS_TO_TAB[statusFilter]}
+        onValueChange={(v) => {
+          const status = TAB_TO_STATUS[v];
+          if (status !== undefined) {
+            setStatusFilter(status);
+            setPage(1);
+          }
+        }}
+      >
+        <TabsList variant="line">
+          <TabsTrigger value="all" variant="line">All entries</TabsTrigger>
+          <TabsTrigger value="published" variant="line">Published</TabsTrigger>
+          <TabsTrigger value="draft" variant="line">Draft</TabsTrigger>
+          <TabsTrigger value="needs-review" variant="line">Needs review</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
       {/* Filter bar */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex flex-wrap gap-3">
-            {/* Search */}
-            <div className="relative flex-1 min-w-[200px]">
-              <Search
-                size={15}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-                aria-hidden="true"
-              />
-              <Input
-                placeholder="Search entries…"
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-
-            {/* Status */}
-            <Select
-              value={status}
-              onValueChange={(v) => setStatus(v as EntryStatus | 'all')}
-            >
-              <SelectTrigger className="w-[160px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {STATUS_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {/* Skill level */}
-            <Select
-              value={skillLevel}
-              onValueChange={(v) => setSkillLevel(v as SkillLevel | 'all')}
-            >
-              <SelectTrigger className="w-[160px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {SKILL_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {/* Origin language */}
-            <Select
-              value={originLanguage}
-              onValueChange={(v) => setOriginLanguage(v)}
-            >
-              <SelectTrigger className="w-[140px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {LANGUAGE_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>
-                    {o.value === 'all' ? 'All Languages' : o.value.toUpperCase()}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3 flex-wrap flex-1">
+          {/* Search */}
+          <div className="relative flex-1 min-w-[200px] max-w-sm">
+            <Search
+              size={15}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+              aria-hidden="true"
+            />
+            <Input
+              placeholder="Search entries…"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              maxLength={200}
+              className="pl-9"
+            />
           </div>
-        </CardContent>
-      </Card>
+
+          {/* Type */}
+          <Select
+            value={typeFilter}
+            onValueChange={(v) => {
+              setTypeFilter(v as EntryType | 'all');
+              setPage(1);
+            }}
+          >
+            <SelectTrigger className="w-[160px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All types</SelectItem>
+              <SelectItem value="stitch">Stitch</SelectItem>
+              <SelectItem value="technique">Technique</SelectItem>
+              <SelectItem value="tool">Tool</SelectItem>
+              <SelectItem value="tradition">Tradition</SelectItem>
+              <SelectItem value="yarn_weight">Yarn Weight</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Category */}
+          <Select
+            value={categoryFilter}
+            disabled={catLoading || catError}
+            onValueChange={(v) => {
+              setCategoryFilter(v);
+              setPage(1);
+            }}
+          >
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="All categories" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All categories</SelectItem>
+              {(catData?.data ?? []).map((cat) => (
+                <SelectItem key={cat.id} value={cat.id}>
+                  {cat.translations?.find((t) => t.locale === 'en')?.name ?? cat.id}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Clear filters */}
+        {hasFilters && (
+          <button
+            onClick={clearFilters}
+            className="text-sm text-slate-500 hover:text-slate-700 transition-colors whitespace-nowrap"
+          >
+            Clear filters
+          </button>
+        )}
+      </div>
 
       {/* Table */}
       <Card>
@@ -451,20 +738,71 @@ export default function EntriesPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Term</TableHead>
-                <TableHead>Origin</TableHead>
-                <TableHead>Skill Level</TableHead>
+                <TableHead className="w-10">
+                  {(() => {
+                    const allOnPageSelected = entries.length > 0 && entries.every(e => selectedIds.has(e.id));
+                    const someOnPageSelected = entries.some(e => selectedIds.has(e.id));
+                    const headerIndeterminate = someOnPageSelected && !allOnPageSelected;
+                    return (
+                      <Checkbox
+                        checked={allOnPageSelected}
+                        indeterminate={headerIndeterminate}
+                        onChange={() => {
+                          setSelectedIds((prev) => {
+                            const next = new Set(prev);
+                            if (allOnPageSelected) {
+                              entries.forEach(e => next.delete(e.id));
+                            } else {
+                              entries.forEach(e => next.add(e.id));
+                            }
+                            return next;
+                          });
+                        }}
+                        aria-label="Select all"
+                      />
+                    );
+                  })()}
+                </TableHead>
+                <SortableTableHead
+                  sortKey="title"
+                  currentSort={sortKey}
+                  currentDirection={sortDirection}
+                  onSort={handleSort}
+                >
+                  Title
+                </SortableTableHead>
+                <SortableTableHead
+                  sortKey="type"
+                  currentSort={sortKey}
+                  currentDirection={sortDirection}
+                  onSort={handleSort}
+                >
+                  Type
+                </SortableTableHead>
+                <TableHead>Category</TableHead>
+                <TableHead>Tags</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Created At</TableHead>
-                <TableHead className="w-12" />
+                <SortableTableHead
+                  sortKey="updated"
+                  currentSort={sortKey}
+                  currentDirection={sortDirection}
+                  onSort={handleSort}
+                >
+                  Updated
+                </SortableTableHead>
+                <TableHead>Languages</TableHead>
+                <TableHead className="w-12">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <SkeletonRows />
+              ) : isError ? (
+                // Empty body — error toast already shown via useEffect
+                <></>
               ) : entries.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6}>
+                  <TableCell colSpan={9}>
                     <div className="flex flex-col items-center justify-center py-16 text-slate-400">
                       <FileX size={36} className="mb-3" aria-hidden="true" />
                       <p className="text-sm font-medium">No entries found</p>
@@ -481,23 +819,57 @@ export default function EntriesPage() {
                     className="cursor-pointer"
                     onClick={() => router.push(`/entries/${entry.id}`)}
                   >
+                    {/* Checkbox — stop propagation so click doesn't navigate */}
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={selectedIds.has(entry.id)}
+                        onChange={() => {
+                          setSelectedIds((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(entry.id)) next.delete(entry.id);
+                            else next.add(entry.id);
+                            return next;
+                          });
+                        }}
+                        aria-label={`Select ${entry.term ?? entry.id}`}
+                      />
+                    </TableCell>
                     <TableCell className="font-medium text-slate-700 max-w-[220px] truncate">
-                      {getEnTerm(entry)}
+                      {entry.term ? entry.term : '—'}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className="text-xs uppercase">
-                        {entry.origin_language}
-                      </Badge>
+                      <EntryTypeBadge type={entry.type} />
+                    </TableCell>
+                    <TableCell className="text-slate-500">
+                      {entry.category_name ?? '—'}
                     </TableCell>
                     <TableCell>
-                      <SkillBadge level={entry.metadata.skill_level} />
+                      <div className="flex flex-wrap items-center gap-1">
+                        {(entry.tags ?? []).slice(0, 3).map((tag) => (
+                          <span
+                            key={tag.id}
+                            className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600"
+                          >
+                            {tag.name}
+                          </span>
+                        ))}
+                        {(entry.tags ?? []).length > 3 && (
+                          <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                            +{(entry.tags ?? []).length - 3}
+                          </span>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <StatusBadge status={entry.status} />
                     </TableCell>
                     <TableCell className="text-slate-500 whitespace-nowrap">
-                      {formatDate(entry.created_at)}
+                      {formatDate(entry.updated_at)}
                     </TableCell>
+                    <TableCell>
+                      <LanguageBadges locales={entry.languages ?? []} />
+                    </TableCell>
+                    {/* Actions — stop propagation so click doesn't navigate */}
                     <TableCell
                       onClick={(e) => e.stopPropagation()}
                       className="text-right"
@@ -543,12 +915,30 @@ export default function EntriesPage() {
                 ))
               )}
             </TableBody>
+            <TableFooter className="bg-white border-t border-slate-200">
+              <tr>
+                <td colSpan={9} className="p-0">
+                  {selectedIds.size > 0 ? (
+                    <BulkActionBar
+                      selectedIds={selectedIds}
+                      onStatusChange={handleBulkStatus}
+                      onDeleteOpen={() => setBulkDeleteOpen(true)}
+                    />
+                  ) : (
+                    <TableFooterBar
+                      pageSize={pageSize}
+                      onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
+                    />
+                  )}
+                </td>
+              </tr>
+            </TableFooter>
           </Table>
         </CardContent>
       </Card>
 
       {/* Pagination */}
-      {!isLoading && entries.length > 0 && (
+      {total > 0 && (
         <Pagination
           page={page}
           totalPages={totalPages}
@@ -564,12 +954,25 @@ export default function EntriesPage() {
         open={deleteTarget !== null}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
         title="Delete Entry"
-        description={`Are you sure you want to delete "${deleteTarget ? getEnTerm(deleteTarget) : ''}"? This action cannot be undone.`}
+        description={`Are you sure you want to delete "${deleteTarget ? (deleteTarget.term ?? '—') : ''}"? This action cannot be undone.`}
         confirmLabel="Delete"
+        loadingLabel="Deleting…"
         onConfirm={() => {
           if (deleteTarget) deleteMutation.mutate(deleteTarget.id);
         }}
         loading={deleteMutation.isPending}
+      />
+
+      {/* Bulk delete confirm dialog */}
+      <ConfirmDialog
+        open={bulkDeleteOpen}
+        onOpenChange={(open) => setBulkDeleteOpen(open)}
+        title="Delete Selected Entries"
+        description={`Are you sure you want to delete ${selectedIds.size} entr${selectedIds.size === 1 ? 'y' : 'ies'}? This action cannot be undone.`}
+        confirmLabel="Delete"
+        loadingLabel="Deleting…"
+        onConfirm={handleBulkDelete}
+        loading={false}
       />
 
       {/* Change status dialog */}
