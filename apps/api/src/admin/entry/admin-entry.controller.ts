@@ -40,7 +40,7 @@ export class AdminEntryController {
     @Query('limit') limit = '20',
     @Query('q') q?: string,
     @Query('search') search?: string,
-    @Query('type') type?: string,
+    @Query('template_id') templateId?: string,
     @Query('category_id') categoryId?: string,
     @Query('status') status?: string,
   ) {
@@ -48,7 +48,7 @@ export class AdminEntryController {
       parseInt(page, 10),
       parseInt(limit, 10),
       q ?? search,
-      type,
+      templateId,
       categoryId,
       status,
     );

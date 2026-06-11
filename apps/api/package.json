@@ -12,6 +12,7 @@
     "db:seed": "ts-node --project tsconfig.json -e \"require('dotenv/config')\" prisma/seed.ts",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
+    "dev": "nest start --watch",
     "start:prod": "node dist/main",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "typecheck": "tsc --noEmit -p tsconfig.json",

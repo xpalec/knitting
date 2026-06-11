@@ -21,12 +21,21 @@ export interface Translation {
   abbreviation?: string;
   definition_short?: string;
   status: "draft" | "reviewed" | "published";
-  content_blocks?: ContentBlock[];
+  metadata?: Record<string, unknown>;
+  // Per-locale content for each block slot, keyed by the block's stable UUID
+  blocks?: Record<string, { content?: unknown }>;
 }
 
 export interface Entry {
   id: string;
-  type: EntryType;
+  entry_template_id?: string | null;
+  entry_template_name?: string | null;
+  // Present on detail responses (findOne)
+  entry_template?: {
+    id: string;
+    name: string;
+    blocks: Array<{ id: string; type: string; order: number; required: boolean }>;
+  } | null;
   origin_language: string;
   status: EntryStatus;
   metadata: {
@@ -34,10 +43,9 @@ export interface Entry {
     definition_short?: string;
     [key: string]: unknown;
   };
-  // Present on list responses (flat projection from the API)
+  // Present on list responses
   term?: string | null;
   slug?: string | null;
-  // NEW flat projections (list endpoint only)
   category_id?: string | null;
   category_name?: string | null;
   tags?: Array<{ id: string; name: string }>;
@@ -57,22 +65,19 @@ export interface ListEntriesParams {
   skillLevel?: SkillLevel;
   originLanguage?: string;
   q?: string;
-  // NEW filter params
-  type?: EntryType;
+  template_id?: string;
   category_id?: string;
 }
 
 export interface CreateEntryPayload {
-  type: EntryType;
+  entry_template_id: string;
   origin_language: string;
-  metadata?: {
-    skill_level?: SkillLevel;
-    definition_short?: string;
-    [key: string]: unknown;
-  };
+  term: string;
+  definition_short?: string;
 }
 
 export interface UpdateEntryPayload {
+  entry_template_id?: string;
   origin_language?: string;
   metadata?: {
     skill_level?: SkillLevel;
@@ -82,12 +87,13 @@ export interface UpdateEntryPayload {
 }
 
 export interface UpdateTranslationPayload {
-  term?: string;
+  term: string;
   slug?: string;
-  abbreviation?: string;
-  definition_short?: string;
+  metadata?: Record<string, unknown>;
+  // Per-locale block content keyed by block order: { "1": { content: <TipTap JSON> }, … }
+  blocks?: Record<string, { content?: unknown }>;
   status?: "draft" | "reviewed" | "published";
-  content_blocks?: ContentBlock[];
+  translator_note?: string;
 }
 
 export function listEntryCategories(): Promise<ApiResponse<AdminCategory[]>> {

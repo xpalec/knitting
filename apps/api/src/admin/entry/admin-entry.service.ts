@@ -20,17 +20,21 @@ export class AdminEntryService {
   ) {}
 
   async create(dto: CreateEntryDto) {
-    const template = await this.prisma.blockTemplate.findUnique({
-      where: { entry_type: dto.entry_type },
+    // Load the template to seed content_blocks and resolve block structure
+    const template = await this.prisma.entryTemplate.findUnique({
+      where: { id: dto.entry_template_id },
     });
+    if (!template) {
+      throw new BadRequestException(`EntryTemplate '${dto.entry_template_id}' not found`);
+    }
 
     const entry = await this.prisma.entry.create({
       data: {
-        type: dto.entry_type,
+        entry_template_id: dto.entry_template_id,
         origin_language: dto.origin_language,
         status: 'draft',
-        metadata: { skill_level: dto.skill_level ?? null },
-        content_blocks: template?.blocks ?? [],
+        metadata: {},
+        content_blocks: template.blocks ?? [],
         translations: {
           create: {
             locale: 'en',
@@ -42,19 +46,14 @@ export class AdminEntryService {
           },
         },
       },
-      include: { translations: true },
+      include: {
+        translations: true,
+        entry_template: { select: { id: true, name: true } },
+      },
     });
 
     return { data: entry };
   }
-
-  private static readonly VALID_ENTRY_TYPES = [
-    'stitch',
-    'technique',
-    'tool',
-    'tradition',
-    'yarn_weight',
-  ] as const;
 
   private static readonly VALID_ENTRY_STATUSES = [
     'draft',
@@ -67,16 +66,10 @@ export class AdminEntryService {
     page: number,
     limit: number,
     search?: string,
-    type?: string,
+    templateId?: string,
     categoryId?: string,
     status?: string,
   ) {
-    if (type !== undefined && !AdminEntryService.VALID_ENTRY_TYPES.includes(type as never)) {
-      throw new BadRequestException(
-        `Invalid type '${type}'. Must be one of: ${AdminEntryService.VALID_ENTRY_TYPES.join(', ')}`,
-      );
-    }
-
     if (status !== undefined && !AdminEntryService.VALID_ENTRY_STATUSES.includes(status as never)) {
       throw new BadRequestException(
         `Invalid status '${status}'. Must be one of: ${AdminEntryService.VALID_ENTRY_STATUSES.join(', ')}`,
@@ -90,8 +83,8 @@ export class AdminEntryService {
         some: { locale: 'en', term: { contains: search, mode: 'insensitive' } },
       };
     }
-    if (type) {
-      where['type'] = type;
+    if (templateId) {
+      where['entry_template_id'] = templateId;
     }
     if (status) {
       where['status'] = status;
@@ -106,6 +99,7 @@ export class AdminEntryService {
       this.prisma.entry.findMany({
         where,
         include: {
+          entry_template: { select: { id: true, name: true } },
           translations: {
             select: { locale: true, term: true, slug: true },
             orderBy: { locale: 'asc' },
@@ -150,24 +144,21 @@ export class AdminEntryService {
         const firstTranslation = e.translations[0];
         const displayTranslation = enTranslation ?? firstTranslation;
 
-        // Category: use first assigned category's EN translation name
         const firstCategory = e.categories[0]?.category ?? null;
         const category_id = firstCategory?.id ?? null;
-        const category_name =
-          firstCategory?.translations[0]?.name ?? null;
+        const category_name = firstCategory?.translations[0]?.name ?? null;
 
-        // Tags: EN translation name with fallback to tag.slug
         const tags = e.tags.map((et) => ({
           id: et.tag.id,
           name: et.tag.translations[0]?.name ?? et.tag.slug,
         }));
 
-        // Languages: distinct locale values from Translation rows
         const languages = [...new Set(e.translations.map((t) => t.locale))];
 
         return {
           id: e.id,
-          type: e.type ?? null,
+          entry_template_id: e.entry_template_id ?? null,
+          entry_template_name: e.entry_template?.name ?? null,
           origin_language: e.origin_language,
           status: e.status,
           metadata: e.metadata,
@@ -189,6 +180,7 @@ export class AdminEntryService {
     const entry = await this.prisma.entry.findUnique({
       where: { id },
       include: {
+        entry_template: { select: { id: true, name: true, blocks: true } },
         translations: true,
         media_assets: { orderBy: { sort_order: 'asc' } },
         pattern_usage: true,
@@ -213,9 +205,13 @@ export class AdminEntryService {
     const entry = await this.prisma.entry.update({
       where: { id },
       data: {
+        ...(dto.entry_template_id !== undefined && { entry_template_id: dto.entry_template_id }),
         ...(dto.origin_language && { origin_language: dto.origin_language }),
         ...(dto.status && { status: dto.status as never }),
         ...(dto.metadata && { metadata: dto.metadata as never }),
+      },
+      include: {
+        entry_template: { select: { id: true, name: true } },
       },
     });
     await this.invalidateCacheForEntry(id);

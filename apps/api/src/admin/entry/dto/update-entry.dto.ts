@@ -1,7 +1,12 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsObject, IsOptional, IsString } from 'class-validator';
+import { IsIn, IsObject, IsOptional, IsString, IsUUID } from 'class-validator';
 
 export class UpdateEntryDto {
+  @ApiPropertyOptional({ example: 'uuid-of-entry-template' })
+  @IsOptional()
+  @IsUUID()
+  entry_template_id?: string;
+
   @ApiPropertyOptional({ example: 'en' })
   @IsOptional()
   @IsString()

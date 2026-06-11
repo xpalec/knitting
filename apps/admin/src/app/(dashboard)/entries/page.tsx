@@ -22,10 +22,10 @@ import {
 import { toast } from 'sonner';
 
 import { entriesApi, listEntryCategories } from '@/lib/api/entries';
-import type { EntryStatus, EntryType, Entry } from '@/lib/api/entries';
+import type { EntryStatus, Entry } from '@/lib/api/entries';
+import { entryTemplatesApi } from '@/lib/api/entry-templates';
 import { SortableTableHead } from '@/components/ui/sortable-table-head';
 import type { SortDirection } from '@/components/ui/sortable-table-head';
-import { EntryTypeBadge } from '@/components/entries/entry-type-badge';
 import { LanguageBadges } from '@/components/ui/language-badges';
 
 import { PageHeader } from '@/components/layout/page-header';
@@ -305,7 +305,7 @@ export default function EntriesPage() {
   const [searchInput, setSearchInput] = useState('');
   const [q, setQ] = useState('');
   const [statusFilter, setStatusFilter] = useState<EntryStatus | 'all'>('all');
-  const [typeFilter, setTypeFilter] = useState<EntryType | 'all'>('all');
+  const [templateFilter, setTemplateFilter] = useState<string | 'all'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string | 'all'>('all');
 
   // Pagination
@@ -405,7 +405,7 @@ export default function EntriesPage() {
     limit: pageSize,
     ...(q ? { q } : {}),
     ...(statusFilter !== 'all' ? { status: statusFilter } : {}),
-    ...(typeFilter !== 'all' ? { type: typeFilter } : {}),
+    ...(templateFilter !== 'all' ? { template_id: templateFilter } : {}),
     ...(categoryFilter !== 'all' ? { category_id: categoryFilter } : {}),
   };
 
@@ -418,6 +418,12 @@ export default function EntriesPage() {
   const { data: catData, isLoading: catLoading, isError: catError } = useQuery({
     queryKey: ['entry-categories'],
     queryFn: () => listEntryCategories(),
+  });
+
+  // Templates query for the filter dropdown
+  const { data: templatesData } = useQuery({
+    queryKey: ['entry-templates'],
+    queryFn: () => entryTemplatesApi.list(),
   });
 
   // Error handling for entries list
@@ -433,12 +439,12 @@ export default function EntriesPage() {
   // Derived: at least one filter is active
   const hasFilters =
     searchInput.trim().length > 0 ||
-    typeFilter !== 'all' ||
+    templateFilter !== 'all' ||
     categoryFilter !== 'all';
 
   function clearFilters() {
     setSearchInput('');
-    setTypeFilter('all');
+    setTemplateFilter('all');
     setCategoryFilter('all');
     setStatusFilter('all');
     setPage(1);
@@ -677,24 +683,22 @@ export default function EntriesPage() {
             />
           </div>
 
-          {/* Type */}
+          {/* Template filter */}
           <Select
-            value={typeFilter}
+            value={templateFilter}
             onValueChange={(v) => {
-              setTypeFilter(v as EntryType | 'all');
+              setTemplateFilter(v);
               setPage(1);
             }}
           >
-            <SelectTrigger className="w-[160px]">
-              <SelectValue />
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="All templates" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All types</SelectItem>
-              <SelectItem value="stitch">Stitch</SelectItem>
-              <SelectItem value="technique">Technique</SelectItem>
-              <SelectItem value="tool">Tool</SelectItem>
-              <SelectItem value="tradition">Tradition</SelectItem>
-              <SelectItem value="yarn_weight">Yarn Weight</SelectItem>
+              <SelectItem value="all">All templates</SelectItem>
+              {(templatesData ?? []).map((t) => (
+                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
 
@@ -838,7 +842,9 @@ export default function EntriesPage() {
                       {entry.term ? entry.term : '—'}
                     </TableCell>
                     <TableCell>
-                      <EntryTypeBadge type={entry.type} />
+                      <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                        {entry.entry_template_name ?? '—'}
+                      </span>
                     </TableCell>
                     <TableCell className="text-slate-500">
                       {entry.category_name ?? '—'}

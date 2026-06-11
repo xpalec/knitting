@@ -32,6 +32,8 @@ import { AdminEntryModule } from './admin/entry/admin-entry.module';
 import { AdminTagModule } from './admin/tag/admin-tag.module';
 import { AdminCategoryModule } from './admin/category/admin-category.module';
 import { AdminBlockTemplateModule } from './admin/block-template/admin-block-template.module';
+import { AdminContentBlockTypeModule } from './admin/content-block-type/admin-content-block-type.module';
+import { AdminEntryTemplateModule } from './admin/entry-template/admin-entry-template.module';
 import { AdminStatsModule } from './admin/stats/admin-stats.module';
 import { UserModule } from './user/user.module';
 import { MediaModule } from './media/media.module';
@@ -76,6 +78,8 @@ const REDIS_URL = process.env.REDIS_URL ?? 'redis://localhost:6379';
     AdminTagModule,
     AdminCategoryModule,
     AdminBlockTemplateModule,
+    AdminContentBlockTypeModule,
+    AdminEntryTemplateModule,
     AdminStatsModule,
     UserModule,
     MediaModule,
