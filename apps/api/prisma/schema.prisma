@@ -88,31 +88,33 @@ enum UserRole {
 // ---------------------------------------------------------------------------
 
 model Entry {
-  id              String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  /// Encyclopaedic classification: stitch, technique, tool, tradition, yarn_weight
-  type            String?
+  id                String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// FK to the EntryTemplate that defines the block structure for this entry
+  entry_template_id String?        @db.Uuid
   /// BCP-47 code of the tradition this entry originates from: en, pl, no, de, fr
-  origin_language String
-  status          EntryStatus @default(draft)
+  origin_language   String
+  status            EntryStatus    @default(draft)
   /// Language-independent structured properties (skill_level, definition_short, etc.)
-  metadata        Json        @default("{}")
+  metadata          Json           @default("{}")
   /// Ordered ContentBlock[] layout manifest — admin-controlled; no translated content here
-  content_blocks  Json        @default("[]")
-  created_at      DateTime    @default(now()) @db.Timestamptz
-  updated_at      DateTime    @updatedAt @db.Timestamptz
-  published_at    DateTime?   @db.Timestamptz
+  content_blocks    Json           @default("[]")
+  created_at        DateTime       @default(now()) @db.Timestamptz
+  updated_at        DateTime       @updatedAt @db.Timestamptz
+  published_at      DateTime?      @db.Timestamptz
 
-  translations  Translation[]
-  media_assets  MediaAsset[]
-  pattern_usage PatternUsage[]
-  categories    EntryCategory[]
-  tags          EntryTag[]
-  related_from  RelatedEntry[]  @relation("RelatedFrom")
-  related_to    RelatedEntry[]  @relation("RelatedTo")
-  contributions Contribution[]
+  entry_template    EntryTemplate? @relation(fields: [entry_template_id], references: [id], onDelete: SetNull)
+  translations      Translation[]
+  media_assets      MediaAsset[]
+  pattern_usage     PatternUsage[]
+  categories        EntryCategory[]
+  tags              EntryTag[]
+  related_from      RelatedEntry[]  @relation("RelatedFrom")
+  related_to        RelatedEntry[]  @relation("RelatedTo")
+  contributions     Contribution[]
   learning_path_entries LearningPathEntry[]
 
   @@index([origin_language])
+  @@index([entry_template_id])
   @@map("entry")
 }
 
@@ -354,6 +356,77 @@ model PatternUsage {
   entry Entry @relation(fields: [entry_id], references: [id], onDelete: Cascade)
 
   @@map("pattern_usage")
+}
+
+// ---------------------------------------------------------------------------
+// ContentBlockType
+// Registry of named, typed reusable block structures (e.g. rich_text, callout).
+// Human-readable labels and per-locale headings live in ContentBlockTypeTranslation.
+// ---------------------------------------------------------------------------
+
+model ContentBlockType {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// Machine-readable slug, e.g. "rich_text". Pattern: [a-z][a-z0-9_]*. Unique.
+  type        String   @unique
+  /// Human-readable label shown in the admin UI, e.g. "Rich Text"
+  label       String   @db.VarChar(255)
+  /// Optional editorial note for admins
+  description String?  @db.Text
+  /// Accent color hex from the shared APP_COLORS palette (optional)
+  color       String?
+  created_at  DateTime @default(now()) @db.Timestamptz
+  updated_at  DateTime @updatedAt @db.Timestamptz
+
+  translations ContentBlockTypeTranslation[]
+
+  @@map("content_block_type")
+}
+
+// ---------------------------------------------------------------------------
+// ContentBlockTypeTranslation
+// Locale-specific heading for a ContentBlockType (e.g. "Treść" for rich_text in pl).
+// One row per locale per block type.
+// ---------------------------------------------------------------------------
+
+model ContentBlockTypeTranslation {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  block_type_id    String   @db.Uuid
+  /// BCP-47 locale code: en, pl
+  locale           String
+  /// Translated heading shown to readers as the section title for this block
+  heading          String   @db.VarChar(255)
+  created_at       DateTime @default(now()) @db.Timestamptz
+  updated_at       DateTime @updatedAt @db.Timestamptz
+
+  block_type ContentBlockType @relation(fields: [block_type_id], references: [id], onDelete: Cascade)
+
+  @@unique([block_type_id, locale])
+  @@index([locale])
+  @@map("content_block_type_translation")
+}
+
+// ---------------------------------------------------------------------------
+// EntryTemplate
+// Named, managed templates — each holds an ordered list of Template_Block_Item
+// references assigned to one entry type. Identified by id, no slug, no translations.
+// ---------------------------------------------------------------------------
+
+model EntryTemplate {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// Human-readable name, e.g. "Technique – Step-by-Step Guide" (≤255 chars)
+  name        String   @db.VarChar(255)
+  /// Optional editorial description for admins (≤1000 chars)
+  description String?  @db.Text
+  /// Ordered array of { id: uuid, type: string, order: number, required: boolean }
+  blocks      Json     @default("[]")
+  /// Nested translation defaults: { [blockId]: { [locale]: { [fieldName]: string } } }
+  translations Json    @default("{}")
+  created_at  DateTime @default(now()) @db.Timestamptz
+  updated_at  DateTime @updatedAt @db.Timestamptz
+
+  entries     Entry[]
+
+  @@map("entry_template")
 }
 
 // ---------------------------------------------------------------------------

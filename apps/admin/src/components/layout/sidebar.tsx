@@ -41,7 +41,7 @@ const NAV_SECTIONS: Array<{ label: string; items: NavItem[] }> = [
     label: 'ENCYCLOPEDIA',
     items: [
       { label: 'Entries', href: '/entries', icon: BookOpen },
-      { label: 'Entry templates', href: '/entry-templates', icon: Layers },
+      { label: 'Entry templates', href: '/entry-templates', icon: Layers, adminOnly: true },
       { label: 'Abbreviations', href: '/abbreviations', icon: CaseSensitive },
       { label: 'Categories', href: '/categories', icon: Tag },
       { label: 'Tags', href: '/tags', icon: Tags },
@@ -140,7 +140,7 @@ export function Sidebar() {
         </div>
 
         {/* Nav sections */}
-        <nav className="flex-1 overflow-y-auto py-2 px-2 space-y-5">
+        <nav className="flex-1 overflow-y-auto py-2 px-2 space-y-5 transition-colors">
           {NAV_SECTIONS.map((section) => {
             const visibleItems = section.items.filter(
               (item) => !item.adminOnly || isAdmin,

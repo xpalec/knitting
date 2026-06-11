@@ -1,7 +1,7 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
-import { Save, Trash2, X, GripVertical, TriangleAlert, MoreHorizontal, CirclePlus } from 'lucide-react';
+import { Save, Trash2, X, GripVertical, TriangleAlert, MoreHorizontal, CirclePlus, ChevronDown } from 'lucide-react';
 
 import {
   DndContext,
@@ -24,6 +24,8 @@ import { CSS } from '@dnd-kit/utilities';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,20 +42,27 @@ import {
   CommandList,
 } from '@/components/ui/command';
 import { cn } from '@/lib/utils';
-import { APP_COLORS, colorSlotFromBg, type AppColorKey } from '@/lib/colors';
-import type { ContentBlockType } from '@/lib/api/content-block-types';
-import type { EntryTemplateBlock } from '@/lib/api/entry-templates';
+import { BLOCK_TYPES, getBlockType } from '@/lib/block-types';
+import {
+  SUPPORTED_LOCALES,
+  LOCALE_LABELS,
+  deriveTemplateTranslationStatus,
+  initBlockDefaults,
+  removeBlockDefaults,
+  setTranslationField,
+  type EntryTemplateBlock,
+  type TemplateTranslations,
+  type Locale,
+} from '@/lib/api/entry-templates';
 
 // ---------------------------------------------------------------------------
-// Pure helpers (exported for property-based tests)
+// Pure block helpers (exported for property-based tests)
 // ---------------------------------------------------------------------------
 
-/** Renumber all blocks so order === index + 1 (1-based contiguous). */
 export function renumber(blocks: EntryTemplateBlock[]): EntryTemplateBlock[] {
   return blocks.map((b, i) => ({ ...b, order: i + 1 }));
 }
 
-/** Swap block at `index` with the block above it and renumber. */
 export function moveUp(blocks: EntryTemplateBlock[], index: number): EntryTemplateBlock[] {
   if (index <= 0 || index >= blocks.length) return blocks;
   const next = [...blocks];
@@ -61,7 +70,6 @@ export function moveUp(blocks: EntryTemplateBlock[], index: number): EntryTempla
   return renumber(next);
 }
 
-/** Swap block at `index` with the block below it and renumber. */
 export function moveDown(blocks: EntryTemplateBlock[], index: number): EntryTemplateBlock[] {
   if (index < 0 || index >= blocks.length - 1) return blocks;
   const next = [...blocks];
@@ -69,47 +77,36 @@ export function moveDown(blocks: EntryTemplateBlock[], index: number): EntryTemp
   return renumber(next);
 }
 
-/** Remove block at `index` and renumber remaining blocks. */
 export function removeBlock(blocks: EntryTemplateBlock[], index: number): EntryTemplateBlock[] {
   return renumber(blocks.filter((_, i) => i !== index));
 }
 
-/** Toggle `required` for block at `index`, leaving all others unchanged. */
 export function toggleRequired(blocks: EntryTemplateBlock[], index: number): EntryTemplateBlock[] {
   return blocks.map((b, i) => (i === index ? { ...b, required: !b.required } : b));
 }
 
-/** Append a new block of the given type with required=false. */
 export function addBlock(blocks: EntryTemplateBlock[], type: string): EntryTemplateBlock[] {
-  return [...blocks, { type, order: blocks.length + 1, required: false }];
+  return [...blocks, { id: crypto.randomUUID(), type, order: blocks.length + 1, required: false }];
 }
 
 // ---------------------------------------------------------------------------
-// Color palette — ordered list for the picker
+// Internal type â€” block with stable drag id
 // ---------------------------------------------------------------------------
 
-const COLOR_KEYS = Object.keys(APP_COLORS) as AppColorKey[];
-
-// ---------------------------------------------------------------------------
-// Internal type — block with a stable drag id
-// ---------------------------------------------------------------------------
-
-interface BlockWithId extends EntryTemplateBlock {
-  _id: string;
+interface BlockWithDndId extends EntryTemplateBlock {
+  _dndId: string;
 }
 
-let _idCounter = 0;
-function nextId(): string {
-  return `block-${++_idCounter}`;
+let _dndCounter = 0;
+function nextDndId(): string { return `dnd-${++_dndCounter}`; }
+
+function attachDndIds(blocks: EntryTemplateBlock[]): BlockWithDndId[] {
+  return blocks.map((b) => ({ ...b, _dndId: nextDndId() }));
 }
 
-function attachIds(blocks: EntryTemplateBlock[]): BlockWithId[] {
-  return blocks.map((b) => ({ ...b, _id: nextId() }));
-}
-
-function stripIds(blocks: BlockWithId[]): EntryTemplateBlock[] {
+function stripDndIds(blocks: BlockWithDndId[]): EntryTemplateBlock[] {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  return blocks.map(({ _id, ...rest }) => rest);
+  return blocks.map(({ _dndId, ...rest }) => rest);
 }
 
 // ---------------------------------------------------------------------------
@@ -119,218 +116,231 @@ function stripIds(blocks: BlockWithId[]): EntryTemplateBlock[] {
 export interface EntryTemplateFormValues {
   name: string;
   description: string;
-  color: string;
   blocks: EntryTemplateBlock[];
+  translations: TemplateTranslations;
 }
 
 export interface EntryTemplateFormProps {
   defaultValues?: Partial<EntryTemplateFormValues>;
-  blockTypes?: ContentBlockType[];
-  isLoadingBlockTypes?: boolean;
-  onSubmit: (values: EntryTemplateFormValues) => void | Promise<void>;
   isSubmitting?: boolean;
+  onSubmit: (values: EntryTemplateFormValues) => void | Promise<void>;
   onCancel?: () => void;
   onDelete?: () => void;
   title?: string;
 }
 
 // ---------------------------------------------------------------------------
-// Block color indicator — small coloured square
-// ---------------------------------------------------------------------------
-
-function BlockColorDot({ colorBg }: { colorBg: string }) {
-  return (
-    <span
-      className="inline-flex h-7 w-7 shrink-0 rounded-md"
-      style={{ backgroundColor: colorBg }}
-      aria-hidden="true"
-    />
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Sortable block row
+// Sortable block row â€” with inline collapsible translation fields
 // ---------------------------------------------------------------------------
 
 interface BlockItemRowProps {
-  block: BlockWithId;
-  blockTypes?: ContentBlockType[];
+  block: BlockWithDndId;
+  locale: string;
+  translations: TemplateTranslations;
   isSubmitting?: boolean;
   onToggleRequired: () => void;
   onRemove: () => void;
+  onFieldChange: (blockId: string, locale: string, fieldName: string, value: string) => void;
 }
 
 function BlockItemRow({
   block,
-  blockTypes,
+  locale,
+  translations,
   isSubmitting,
   onToggleRequired,
   onRemove,
+  onFieldChange,
 }: BlockItemRowProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: block._id });
+  const [expanded, setExpanded] = useState(false);
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: block._dndId,
+  });
 
-  const matchedType = blockTypes?.find((bt) => bt.type === block.type);
-  const label = matchedType?.label ?? block.type;
-  // Use the matched ContentBlockType's color if available, else a neutral grey
-  const colorBg = matchedType?.color ?? '#EEEEF2';
-  const isUnknown = !matchedType;
+  const style = { transform: CSS.Transform.toString(transform), transition };
+  const blockType = getBlockType(block.type);
+  const label = blockType?.label ?? block.type;
+  const colorBg = blockType?.color ?? '#EEEEF2';
+  const isUnknown = !blockType;
+  const hasTranslatableFields = (blockType?.translatableFields?.length ?? 0) > 0;
 
   return (
     <div
       ref={setNodeRef}
       style={style}
       className={cn(
-        'flex items-center gap-3 px-4 py-3 bg-white',
+        'bg-white',
         isDragging && 'opacity-50 shadow-lg z-50 rounded-md',
       )}
     >
-      {/* Drag handle */}
-      <button
-        type="button"
-        className="text-slate-300 hover:text-slate-500 cursor-grab active:cursor-grabbing shrink-0 touch-none"
-        aria-label="Drag to reorder"
-        {...attributes}
-        {...listeners}
-      >
-        <GripVertical size={16} aria-hidden="true" />
-      </button>
+      {/* â”€â”€ Main row â”€â”€ */}
+      <div className="flex items-center gap-3 px-4 py-3">
+        {/* Drag handle */}
+        <button
+          type="button"
+          className="text-slate-300 hover:text-slate-500 cursor-grab active:cursor-grabbing shrink-0 touch-none"
+          aria-label="Drag to reorder"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical size={16} aria-hidden="true" />
+        </button>
 
-      {/* Colour square */}
-      <BlockColorDot colorBg={colorBg} />
+        {/* Color dot */}
+        <span
+          className="inline-flex h-7 w-7 shrink-0 rounded-md"
+          style={{ backgroundColor: colorBg }}
+          aria-hidden="true"
+        />
 
-      {/* Block name + type subtitle */}
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-slate-700 truncate">{label}</p>
-        {isUnknown ? (
-          <p className="flex items-center gap-1 text-xs text-amber-500">
-            <TriangleAlert size={11} aria-hidden="true" />
-            Unknown block type
-          </p>
-        ) : (
-          <p className="text-xs text-slate-400 truncate">{block.type}</p>
+        {/* Label */}
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-slate-700 truncate">{label}</p>
+          {isUnknown ? (
+            <p className="flex items-center gap-1 text-xs text-amber-500">
+              <TriangleAlert size={11} aria-hidden="true" />
+              Unknown block type
+            </p>
+          ) : (
+            <p className="text-xs text-slate-400 truncate">{block.type}</p>
+          )}
+        </div>
+
+        {/* Required / Optional toggle */}
+        <button
+          type="button"
+          onClick={onToggleRequired}
+          disabled={isSubmitting}
+          className="shrink-0"
+          aria-label={`Toggle ${block.required ? 'Optional' : 'Required'}`}
+        >
+          {block.required ? (
+            <span className="inline-flex items-center rounded-full px-3 py-0.5 text-xs font-medium bg-green-100 text-green-700">
+              Required
+            </span>
+          ) : (
+            <span className="inline-flex items-center rounded-full border border-slate-200 px-3 py-0.5 text-xs font-medium text-slate-500">
+              Optional
+            </span>
+          )}
+        </button>
+
+        {/* Expand translation fields (only if block has translatable fields) */}
+        {hasTranslatableFields && (
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="shrink-0 text-slate-400 hover:text-slate-600 transition-colors"
+            aria-label={expanded ? 'Hide translation fields' : 'Show translation fields'}
+            aria-expanded={expanded}
+          >
+            <ChevronDown
+              size={15}
+              className={cn('transition-transform duration-200', expanded && 'rotate-180')}
+              aria-hidden="true"
+            />
+          </button>
         )}
+
+        {/* â‹® Actions */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              type="button"
+              size="icon"
+              disabled={isSubmitting}
+              className="h-7 w-7 shrink-0 text-slate-400 hover:text-slate-600"
+              aria-label="Block actions"
+            >
+              <MoreHorizontal size={15} aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={onRemove}>
+              <X size={14} aria-hidden="true" />
+              Remove
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
-      {/* Required / Optional toggle badge */}
-      <button
-        type="button"
-        onClick={onToggleRequired}
-        disabled={isSubmitting}
-        className="shrink-0"
-        aria-label={`Toggle ${block.required ? 'Optional' : 'Required'}`}
-      >
-        {block.required ? (
-          <span className="inline-flex items-center rounded-full px-3 py-0.5 text-xs font-medium bg-green-100 text-green-700">
-            Required
-          </span>
-        ) : (
-          <span className="inline-flex items-center rounded-full border border-slate-200 px-3 py-0.5 text-xs font-medium text-slate-500">
-            Optional
-          </span>
-        )}
-      </button>
-
-      {/* ⋮ Actions menu */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            type="button"
-            size="icon"
-            disabled={isSubmitting}
-            className="h-7 w-7 shrink-0 text-slate-400 hover:text-slate-600"
-            aria-label="Block actions"
-          >
-            <MoreHorizontal size={15} aria-hidden="true" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem
-            className="text-red-600 focus:text-red-600"
-            onClick={onRemove}
-          >
-            <X size={14} aria-hidden="true" />
-            Remove
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {/* â”€â”€ Collapsible translation fields â”€â”€ */}
+      {expanded && hasTranslatableFields && (
+        <div className="px-4 pb-4 pt-1 border-t border-slate-100 space-y-3 bg-slate-50/60">
+          {blockType!.translatableFields.map((field) => (
+            <div key={field.name} className="space-y-1.5">
+              <Label htmlFor={`${locale}-${block.id}-${field.name}`} className="text-xs text-slate-600">
+                {field.label}
+              </Label>
+              <Input
+                id={`${locale}-${block.id}-${field.name}`}
+                value={translations[block.id]?.[locale]?.[field.name] ?? ''}
+                onChange={(e) => onFieldChange(block.id, locale, field.name, e.target.value)}
+                placeholder={`${LOCALE_LABELS[locale as Locale]} ${field.label.toLowerCase()} text`}
+                maxLength={field.maxLength}
+                disabled={isSubmitting}
+                className="h-8 text-sm"
+              />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Add block — combobox (Popover + Command)
+// Add block â€” combobox popover
 // ---------------------------------------------------------------------------
 
-interface AddBlockRowProps {
-  blockTypes?: ContentBlockType[];
-  isLoading?: boolean;
+function AddBlockRow({
+  isSubmitting,
+  onAdd,
+}: {
   isSubmitting?: boolean;
   onAdd: (type: string) => void;
-}
-
-function AddBlockRow({ blockTypes, isLoading, isSubmitting, onAdd }: AddBlockRowProps) {
+}) {
   const [open, setOpen] = useState(false);
-  const hasBlockTypes = blockTypes && blockTypes.length > 0;
-  const disabled = isSubmitting || isLoading || !hasBlockTypes;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
           type="button"
-          disabled={disabled}
+          disabled={isSubmitting}
           className={cn(
             'flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-slate-300',
             'py-2.5 text-sm text-slate-500 transition-colors',
             'hover:border-violet-400 hover:text-violet-600',
-            'disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-slate-300 disabled:hover:text-slate-500',
+            'disabled:cursor-not-allowed disabled:opacity-40',
           )}
         >
           <CirclePlus size={15} aria-hidden="true" />
-          {isLoading ? 'Loading block types…' : 'Add block'}
+          Add block
         </button>
       </PopoverTrigger>
-      <PopoverContent
-        className="p-0 w-[320px]"
-        align="start"
-        sideOffset={6}
-      >
+      <PopoverContent className="p-0 w-[320px]" align="start" sideOffset={6}>
         <Command>
-          <CommandInput placeholder="Search block types…" />
+          <CommandInput placeholder="Search block typesâ€¦" />
           <CommandList>
             <CommandEmpty>No block types found.</CommandEmpty>
             <CommandGroup>
-              {(blockTypes ?? []).map((bt) => (
+              {BLOCK_TYPES.map((bt) => (
                 <CommandItem
-                  key={bt.type}
+                  key={bt.slug}
                   value={bt.label}
-                  onSelect={() => {
-                    onAdd(bt.type);
-                    setOpen(false);
-                  }}
+                  onSelect={() => { onAdd(bt.slug); setOpen(false); }}
                   className="gap-2.5"
                 >
-                  {/* Color dot */}
                   <span
                     className="inline-flex h-5 w-5 shrink-0 rounded"
-                    style={{ backgroundColor: bt.color ?? '#EEEEF2' }}
+                    style={{ backgroundColor: bt.color }}
                     aria-hidden="true"
                   />
                   <span>{bt.label}</span>
-                  <span className="ml-auto text-xs text-slate-400 font-mono">{bt.type}</span>
+                  <span className="ml-auto text-xs text-slate-400 font-mono">{bt.slug}</span>
                 </CommandItem>
               ))}
             </CommandGroup>
@@ -342,26 +352,116 @@ function AddBlockRow({ blockTypes, isLoading, isSubmitting, onAdd }: AddBlockRow
 }
 
 // ---------------------------------------------------------------------------
-// Main component
+// Block list with locale tabs at the top
+// ---------------------------------------------------------------------------
+
+function BlockListWithTabs({
+  blocks,
+  translations,
+  isSubmitting,
+  sensors,
+  onDragEnd,
+  onToggleRequired,
+  onRemove,
+  onFieldChange,
+  onAdd,
+}: {
+  blocks: BlockWithDndId[];
+  translations: TemplateTranslations;
+  isSubmitting: boolean;
+  sensors: ReturnType<typeof useSensors>;
+  onDragEnd: (event: DragEndEvent) => void;
+  onToggleRequired: (dndId: string) => void;
+  onRemove: (dndId: string) => void;
+  onFieldChange: (blockId: string, locale: string, fieldName: string, value: string) => void;
+  onAdd: (type: string) => void;
+}) {
+  const plainBlocks = stripDndIds(blocks);
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-4">
+      <div>
+        <p className="text-sm font-semibold text-slate-700">Template structure</p>
+        <p className="text-xs text-slate-400 mt-0.5">
+          Add blocks, set required/optional, and expand each block to fill in translation defaults
+        </p>
+      </div>
+
+      <Tabs defaultValue="en">
+        {/* Locale tab strip */}
+        <TabsList variant="line" className="w-full justify-start">
+          {SUPPORTED_LOCALES.map((locale) => {
+            const status = deriveTemplateTranslationStatus({ blocks: plainBlocks, translations }, locale);
+            return (
+              <TabsTrigger key={locale} value={locale} variant="line" className="gap-1.5 items-center">
+                <span
+                  className={cn(
+                    'h-1.5 w-1.5 rounded-full shrink-0 transition-colors',
+                    status === 'complete' ? 'bg-green-500' : 'bg-transparent',
+                  )}
+                  aria-hidden="true"
+                />
+                <span>{LOCALE_LABELS[locale]}</span>
+              </TabsTrigger>
+            );
+          })}
+        </TabsList>
+
+        {/* One tab panel per locale â€” same block list, different translation values */}
+        {SUPPORTED_LOCALES.map((locale) => (
+          <TabsContent key={locale} value={locale} className="mt-4 space-y-3">
+            {blocks.length > 0 ? (
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+                <SortableContext items={blocks.map((b) => b._dndId)} strategy={verticalListSortingStrategy}>
+                  <div className="divide-y rounded-lg border border-slate-200 overflow-hidden">
+                    {blocks.map((block) => (
+                      <BlockItemRow
+                        key={block._dndId}
+                        block={block}
+                        locale={locale}
+                        translations={translations}
+                        isSubmitting={isSubmitting}
+                        onToggleRequired={() => onToggleRequired(block._dndId)}
+                        onRemove={() => onRemove(block._dndId)}
+                        onFieldChange={onFieldChange}
+                      />
+                    ))}
+                  </div>
+                </SortableContext>
+              </DndContext>
+            ) : (
+              <p className="py-4 text-center text-sm text-slate-400">
+                No blocks yet. Add one below.
+              </p>
+            )}
+
+            <AddBlockRow isSubmitting={isSubmitting} onAdd={onAdd} />
+          </TabsContent>
+        ))}
+      </Tabs>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main form component
 // ---------------------------------------------------------------------------
 
 export function EntryTemplateForm({
   defaultValues,
-  blockTypes,
-  isLoadingBlockTypes,
-  onSubmit,
   isSubmitting = false,
+  onSubmit,
   onCancel,
   onDelete,
   title,
 }: EntryTemplateFormProps) {
   const [name, setName] = useState(defaultValues?.name ?? '');
   const [description, setDescription] = useState(defaultValues?.description ?? '');
-  const [color, setColor] = useState<string>(
-    defaultValues?.color ?? APP_COLORS.violet.bg
+  const [blocks, setBlocks] = useState<BlockWithDndId[]>(() =>
+    attachDndIds(defaultValues?.blocks ?? []),
   );
-  const [blocks, setBlocks] = useState<BlockWithId[]>(() =>
-    attachIds(defaultValues?.blocks ?? [])
+  const [translations, setTranslations] = useState<TemplateTranslations>(
+    defaultValues?.translations ?? {},
   );
 
   const isSubmitDisabled = isSubmitting || !name.trim();
@@ -375,16 +475,54 @@ export function EntryTemplateForm({
     const { active, over } = event;
     if (!over || active.id === over.id) return;
     setBlocks((prev) => {
-      const oldIndex = prev.findIndex((b) => b._id === active.id);
-      const newIndex = prev.findIndex((b) => b._id === over.id);
+      const oldIndex = prev.findIndex((b) => b._dndId === active.id);
+      const newIndex = prev.findIndex((b) => b._dndId === over.id);
       if (oldIndex === -1 || newIndex === -1) return prev;
-      const reordered = arrayMove(prev, oldIndex, newIndex);
-      return reordered.map((b, i) => ({ ...b, order: i + 1 }));
+      return arrayMove(prev, oldIndex, newIndex).map((b, i) => ({ ...b, order: i + 1 }));
     });
   }
 
+  function handleAddBlock(type: string) {
+    const newId = crypto.randomUUID();
+    setBlocks((prev) => [
+      ...prev,
+      { id: newId, type, order: prev.length + 1, required: false, _dndId: nextDndId() },
+    ]);
+    setTranslations((t) => initBlockDefaults(t, newId));
+  }
+
+  function handleRemoveBlock(dndId: string) {
+    setBlocks((prev) => {
+      const idx = prev.findIndex((b) => b._dndId === dndId);
+      if (idx === -1) return prev;
+      const removedId = prev[idx]!.id;
+      setTranslations((t) => removeBlockDefaults(t, removedId));
+      return prev.filter((_, i) => i !== idx).map((b, i) => ({ ...b, order: i + 1 }));
+    });
+  }
+
+  function handleToggleRequired(dndId: string) {
+    setBlocks((prev) =>
+      prev.map((b) => (b._dndId === dndId ? { ...b, required: !b.required } : b)),
+    );
+  }
+
+  function handleTranslationFieldChange(
+    blockId: string,
+    locale: string,
+    fieldName: string,
+    value: string,
+  ) {
+    setTranslations((t) => setTranslationField(t, blockId, locale, fieldName, value));
+  }
+
   function buildValues(): EntryTemplateFormValues {
-    return { name, description, color, blocks: renumber(stripIds(blocks)) };
+    return {
+      name,
+      description,
+      blocks: renumber(stripDndIds(blocks)),
+      translations,
+    };
   }
 
   function handleSave(e: React.MouseEvent) {
@@ -403,8 +541,7 @@ export function EntryTemplateForm({
 
   return (
     <form onSubmit={handleSubmit} noValidate>
-
-      {/* ── Action buttons row (top-right) ─────────────────────────────── */}
+      {/* â”€â”€ Title + action buttons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-slate-800">{displayTitle}</h1>
 
@@ -421,13 +558,7 @@ export function EntryTemplateForm({
             </Button>
           )}
           {onCancel && (
-            <Button
-              variant="outline"
-              type="button"
-              onClick={onCancel}
-              disabled={isSubmitting}
-              className="gap-2"
-            >
+            <Button variant="outline" type="button" onClick={onCancel} disabled={isSubmitting} className="gap-2">
               <X size={15} aria-hidden="true" /> Cancel
             </Button>
           )}
@@ -438,167 +569,59 @@ export function EntryTemplateForm({
             className="gap-2 bg-violet-600 hover:bg-violet-700 text-white"
           >
             <Save size={15} aria-hidden="true" />
-            {isSubmitting ? 'Saving…' : 'Save'}
+            {isSubmitting ? 'Savingâ€¦' : 'Save'}
           </Button>
         </div>
       </div>
 
-      {/* ── Two-column layout ──────────────────────────────────────────── */}
-      <div className="flex gap-5 items-start">
+      {/* ── Content ───────────────────────────────────────────────── */}
+      <div className="space-y-4">
 
-        {/* ── Left: preview panel ───────────────────────────────────── */}
-        <div className="flex-1 min-w-0">
-          <div className="rounded-xl border border-slate-200 bg-white p-6 min-h-[420px]">
-            <p className="text-sm font-semibold text-slate-700 mb-1">Template preview</p>
-            <p className="text-xs text-slate-400">This is how editors will see this template</p>
+        {/* Template details */}
+        <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-4">
+          <p className="text-sm font-semibold text-slate-700">Template details</p>
 
-            {/* Preview — shows block structure as simple stacked cards */}
-            {blocks.length > 0 && (
-              <div className="mt-6 space-y-2">
-                {blocks.map((block) => {
-                  const matchedType = blockTypes?.find((bt) => bt.type === block.type);
-                  const label = matchedType?.label ?? block.type;
-                  const colorBg = matchedType?.color ?? '#EEEEF2';
-                  return (
-                    <div
-                      key={block._id}
-                      className="flex items-center gap-3 rounded-lg border border-slate-100 bg-slate-50 px-4 py-3"
-                    >
-                      <span
-                        className="inline-flex h-6 w-6 shrink-0 rounded-md"
-                        style={{ backgroundColor: colorBg }}
-                        aria-hidden="true"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-slate-700 truncate">{label}</p>
-                        <p className="text-xs text-slate-400 truncate">{block.type}</p>
-                      </div>
-                      {block.required && (
-                        <span className="text-xs text-slate-400">Required</span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* ── Right: form panel ─────────────────────────────────────── */}
-        <div className="w-[580px] shrink-0 space-y-4">
-
-          {/* Template name + color card */}
-          <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-4">
-
-            {/* Template name */}
-            <div className="space-y-1.5">
-              <Label htmlFor="template-name" className="text-sm font-medium text-slate-700">
-                Template name <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="template-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Stitches"
-                disabled={isSubmitting}
-                maxLength={255}
-                className="h-9"
-              />
-            </div>
-
-            {/* Color picker */}
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-slate-700">
-                Color <span className="text-red-500">*</span>
-              </Label>
-              <div className="flex items-center gap-2 flex-wrap">
-                {COLOR_KEYS.map((key) => {
-                  const slot = APP_COLORS[key];
-                  const isSelected = color === slot.bg;
-                  return (
-                    <button
-                      key={key}
-                      type="button"
-                      aria-label={slot.label}
-                      onClick={() => setColor(slot.bg)}
-                      className={cn(
-                        'h-8 w-8 rounded-full transition-all',
-                        isSelected
-                          ? 'ring-2 ring-offset-2 ring-slate-400'
-                          : 'hover:scale-110',
-                      )}
-                      style={{ backgroundColor: slot.bg }}
-                    />
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* Template structure card */}
-          <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
-            <div>
-              <p className="text-sm font-semibold text-slate-700">Template structure</p>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Add and arrange blocks to define the structure of this template
-              </p>
-            </div>
-
-            {/* Block list */}
-            {blocks.length > 0 && (
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleDragEnd}
-              >
-                <SortableContext
-                  items={blocks.map((b) => b._id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  <div className="divide-y rounded-lg border border-slate-200 overflow-hidden">
-                    {blocks.map((block) => (
-                      <BlockItemRow
-                        key={block._id}
-                        block={block}
-                        blockTypes={blockTypes}
-                        isSubmitting={isSubmitting}
-                        onToggleRequired={() =>
-                          setBlocks((prev) => {
-                            const idx = prev.findIndex((b) => b._id === block._id);
-                            if (idx === -1) return prev;
-                            return prev.map((b, i) =>
-                              i === idx ? { ...b, required: !b.required } : b
-                            );
-                          })
-                        }
-                        onRemove={() =>
-                          setBlocks((prev) => {
-                            const filtered = prev.filter((b) => b._id !== block._id);
-                            return filtered.map((b, i) => ({ ...b, order: i + 1 }));
-                          })
-                        }
-                      />
-                    ))}
-                  </div>
-                </SortableContext>
-              </DndContext>
-            )}
-
-            {/* Add block — full width dashed button */}
-            <AddBlockRow
-              blockTypes={blockTypes}
-              isLoading={isLoadingBlockTypes}
-              isSubmitting={isSubmitting}
-              onAdd={(type) =>
-                setBlocks((prev) => [
-                  ...prev,
-                  { type, order: prev.length + 1, required: false, _id: nextId() },
-                ])
-              }
+          <div className="space-y-1.5">
+            <Label htmlFor="template-name">
+              Template name <span className="text-red-500">*</span>
+            </Label>
+            <Input
+              id="template-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Technique – Step-by-Step Guide"
+              disabled={isSubmitting}
+              maxLength={255}
             />
           </div>
 
+          <div className="space-y-1.5">
+            <Label htmlFor="template-description">Description</Label>
+            <Textarea
+              id="template-description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Optional description for editors."
+              rows={3}
+              className="resize-none"
+              disabled={isSubmitting}
+              maxLength={1000}
+            />
+          </div>
         </div>
+
+        {/* Block structure + locale tabs + collapsible translation fields */}
+        <BlockListWithTabs
+          blocks={blocks}
+          translations={translations}
+          isSubmitting={isSubmitting}
+          sensors={sensors}
+          onDragEnd={handleDragEnd}
+          onToggleRequired={handleToggleRequired}
+          onRemove={handleRemoveBlock}
+          onFieldChange={handleTranslationFieldChange}
+          onAdd={handleAddBlock}
+        />
       </div>
     </form>
   );

@@ -124,26 +124,8 @@ function LocaleTabContent({
 
   return (
     <div className="space-y-4 pt-4">
-      {/* Header input */}
+      {/* Preview card — header input sits above the editor, inside the same card */}
       <div className="rounded-lg border border-slate-200 bg-white p-5 space-y-3">
-        <div className="space-y-1.5">
-          <Label htmlFor={`heading-${locale}`}>
-            Header <span className="text-red-500">*</span>
-          </Label>
-          <Input
-            id={`heading-${locale}`}
-            value={state.heading}
-            onChange={(e) => onChange({ heading: e.target.value })}
-            placeholder="Default header"
-            disabled={disabled}
-          />
-        </div>
-      </div>
-
-      {/* Preview card */}
-      <div className="rounded-lg border border-slate-200 bg-white p-5 space-y-3">
-        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Preview</p>
-
         {/* Block header row */}
         <div
           className="flex items-center gap-3 rounded-md px-4 py-2.5"
@@ -157,15 +139,21 @@ function LocaleTabContent({
           <span className="text-sm font-medium" style={{ color: colorSlot.fg }}>
             {state.heading || blockLabel || 'Block Name'}
           </span>
+        </div>
+
+        {/* Header input */}
+        <div className="space-y-1.5">
+          <Label htmlFor={`heading-${locale}`}>Header</Label>
           <Input
-            readOnly
-            value={state.heading || 'Default header text'}
-            className="ml-auto max-w-[180px] h-7 text-xs bg-white/70 border-0 cursor-default"
-            tabIndex={-1}
+            id={`heading-${locale}`}
+            value={state.heading}
+            onChange={(e) => onChange({ heading: e.target.value })}
+            placeholder={`${LOCALE_LABELS[locale]} header text can be changed`}
+            disabled={disabled}
           />
         </div>
 
-        {/* TipTap editor placeholder — read-only for preview */}
+        {/* TipTap editor */}
         <RichTextEditor
           placeholder="Write content here…"
           disabled

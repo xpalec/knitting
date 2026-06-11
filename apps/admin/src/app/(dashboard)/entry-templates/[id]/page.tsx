@@ -9,7 +9,6 @@ import { toast } from 'sonner';
 
 import { entryTemplatesApi } from '@/lib/api/entry-templates';
 import type { EntryTemplate } from '@/lib/api/entry-templates';
-import { contentBlockTypesApi } from '@/lib/api/content-block-types';
 import { ApiError } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
 import { EntryTemplateForm } from '@/components/entry-templates/entry-template-form';
@@ -22,8 +21,8 @@ function mapTemplateToFormValues(template: EntryTemplate): EntryTemplateFormValu
   return {
     name: template.name,
     description: template.description ?? '',
-    color: '',
     blocks: template.blocks,
+    translations: template.translations ?? {},
   };
 }
 
@@ -39,19 +38,12 @@ export default function EditEntryTemplatePage({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   useEffect(() => {
-    if (currentUser && currentUser.role !== 'admin') {
-      router.replace('/dashboard');
-    }
+    if (currentUser && currentUser.role !== 'admin') router.replace('/dashboard');
   }, [currentUser, router]);
 
   const { data: template, isLoading, error } = useQuery({
     queryKey: ['entry-templates', id],
     queryFn: () => entryTemplatesApi.getById(id),
-  });
-
-  const { data: blockTypes, isLoading: isLoadingBlockTypes } = useQuery({
-    queryKey: ['content-block-types'],
-    queryFn: () => contentBlockTypesApi.list(),
   });
 
   const updateMutation = useMutation({
@@ -60,6 +52,7 @@ export default function EditEntryTemplatePage({
         name: values.name.trim(),
         description: values.description.trim() || undefined,
         blocks: values.blocks,
+        translations: values.translations,
       }),
     onSuccess: () => {
       toast.success('Template saved');
@@ -86,15 +79,20 @@ export default function EditEntryTemplatePage({
     return (
       <div className="p-6 space-y-6">
         <Skeleton className="h-8 w-64" />
-        <div className="max-w-3xl space-y-4">
-          <div className="rounded-lg border border-slate-200 p-5 space-y-4">
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-20 w-full" />
+        <div className="flex gap-5">
+          <div className="flex-1 space-y-4">
+            <div className="rounded-xl border border-slate-200 p-5 space-y-4">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-20 w-full" />
+            </div>
+            <div className="rounded-xl border border-slate-200 p-5 space-y-3">
+              {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
+            </div>
           </div>
-          <div className="rounded-lg border border-slate-200 p-5 space-y-3">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} className="h-12 w-full" />
-            ))}
+          <div className="w-[320px] space-y-4">
+            <div className="rounded-xl border border-slate-200 p-4">
+              <Skeleton className="h-10 w-full" />
+            </div>
           </div>
         </div>
       </div>
@@ -134,8 +132,6 @@ export default function EditEntryTemplatePage({
       <div className="p-6">
         <EntryTemplateForm
           defaultValues={mapTemplateToFormValues(template)}
-          blockTypes={blockTypes}
-          isLoadingBlockTypes={isLoadingBlockTypes}
           isSubmitting={updateMutation.isPending}
           onSubmit={(values) => updateMutation.mutate(values)}
           onCancel={() => router.push('/entry-templates')}
