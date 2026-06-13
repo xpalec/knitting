@@ -26,31 +26,23 @@ import { UpsertTagTranslationDto } from './dto/upsert-tag-translation.dto';
 export class AdminTagController {
   constructor(private readonly adminTagService: AdminTagService) {}
 
-  // ---------------------------------------------------------------------------
-  // Tag CRUD
-  // ---------------------------------------------------------------------------
-
   @Get('tags')
   @ApiOperation({ summary: 'List all tags (admin view — all locales, all statuses)' })
   @ApiQuery({ name: 'page', required: false, example: 1 })
   @ApiQuery({ name: 'limit', required: false, example: 50 })
-  @ApiQuery({ name: 'search', required: false })
+  @ApiQuery({ name: 'search', required: false, description: 'Search by EN name' })
   findAll(
     @Query('page') page = '1',
     @Query('limit') limit = '50',
     @Query('search') search?: string,
   ) {
-    return this.adminTagService.findAll(
-      parseInt(page, 10),
-      parseInt(limit, 10),
-      search,
-    );
+    return this.adminTagService.findAll(parseInt(page, 10), parseInt(limit, 10), search);
   }
 
-  @Get('tags/:slug')
+  @Get('tags/:id')
   @ApiOperation({ summary: 'Single tag detail with all translations' })
-  findOne(@Param('slug') slug: string) {
-    return this.adminTagService.findOne(slug);
+  findOne(@Param('id') id: string) {
+    return this.adminTagService.findOne(id);
   }
 
   @Post('tags')
@@ -59,47 +51,35 @@ export class AdminTagController {
     return this.adminTagService.create(dto);
   }
 
-  @Put('tags/:slug')
-  @ApiOperation({ summary: 'Update tag type and/or color_hex' })
-  update(@Param('slug') slug: string, @Body() dto: UpdateTagDto) {
-    return this.adminTagService.update(slug, dto);
+  @Put('tags/:id')
+  @ApiOperation({ summary: 'Update tag (no-op — all content via translations)' })
+  update(@Param('id') id: string, @Body() dto: UpdateTagDto) {
+    return this.adminTagService.update(id, dto);
   }
 
-  @Delete('tags/:slug')
+  @Delete('tags/:id')
   @Roles('admin' as never)
-  @ApiOperation({
-    summary: 'Delete tag — blocked if any entries are assigned',
-  })
-  delete(@Param('slug') slug: string) {
-    return this.adminTagService.delete(slug);
+  @ApiOperation({ summary: 'Delete tag — blocked if any entries are assigned' })
+  delete(@Param('id') id: string) {
+    return this.adminTagService.delete(id);
   }
 
-  // ---------------------------------------------------------------------------
-  // TagTranslation
-  // ---------------------------------------------------------------------------
-
-  @Put('tags/:slug/translations/:locale')
-  @ApiOperation({ summary: 'Create or update a TagTranslation (name, description, SEO fields)' })
+  @Put('tags/:id/translations/:locale')
+  @ApiOperation({ summary: 'Create or update a TagTranslation' })
   upsertTranslation(
-    @Param('slug') slug: string,
+    @Param('id') id: string,
     @Param('locale') locale: string,
     @Body() dto: UpsertTagTranslationDto,
   ) {
-    return this.adminTagService.upsertTranslation(slug, locale, dto);
+    return this.adminTagService.upsertTranslation(id, locale, dto);
   }
 
-  // ---------------------------------------------------------------------------
-  // Entry tag assignment
-  // ---------------------------------------------------------------------------
-
   @Post('entries/:id/tags')
-  @ApiOperation({
-    summary: 'Assign tags to an entry — replaces the current set',
-  })
+  @ApiOperation({ summary: 'Assign tags to an entry by tag ID — replaces the current set' })
   assignEntryTags(
     @Param('id') id: string,
     @Body() dto: AssignEntryTagsDto,
   ) {
-    return this.adminTagService.assignEntryTags(id, dto.slugs);
+    return this.adminTagService.assignEntryTags(id, dto.ids);
   }
 }

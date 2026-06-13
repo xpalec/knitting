@@ -9,8 +9,14 @@ export class ArticleService {
     const where: Record<string, unknown> = { status: 'published' };
     if (countryCode) where['country_code'] = countryCode;
     if (tag) {
-      // Filter by tag slug (canonical identifier) — locale-independent
-      where['tags'] = { some: { tag: { slug: tag } } };
+      // Filter by locale-specific TagTranslation slug
+      where['tags'] = {
+        some: {
+          tag: {
+            translations: { some: { slug: tag } },
+          },
+        },
+      };
     }
 
     const articles = await this.prisma.article.findMany({
@@ -42,10 +48,8 @@ export class ArticleService {
         reading_time_minutes: a.reading_time_minutes,
         published_at: a.published_at,
         tags: a.tags.map((at) => ({
-          slug: at.tag.slug,
-          type: at.tag.type,
-          // Falls back to slug if no translation exists for the locale
-          name: at.tag.translations[0]?.name ?? at.tag.slug,
+          id: at.tag.id,
+          name: at.tag.translations[0]?.name ?? '',
         })),
       })),
     };
@@ -83,9 +87,8 @@ export class ArticleService {
         reading_time_minutes: article.reading_time_minutes,
         published_at: article.published_at,
         tags: article.tags.map((at) => ({
-          slug: at.tag.slug,
-          type: at.tag.type,
-          name: at.tag.translations[0]?.name ?? at.tag.slug,
+          id: at.tag.id,
+          name: at.tag.translations[0]?.name ?? '',
         })),
       },
     };

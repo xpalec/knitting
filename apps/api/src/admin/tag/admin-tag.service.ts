@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -8,6 +7,16 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateTagDto } from './dto/create-tag.dto';
 import { UpdateTagDto } from './dto/update-tag.dto';
 import { UpsertTagTranslationDto } from './dto/upsert-tag-translation.dto';
+
+/** Auto-derive a kebab-case slug from a display name. */
+function toSlug(value: string): string {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
 
 @Injectable()
 export class AdminTagService {
@@ -19,8 +28,17 @@ export class AdminTagService {
 
   async findAll(page: number, limit: number, search?: string) {
     const skip = (page - 1) * limit;
+
+    // Search against EN translation name when provided
     const where = search
-      ? { slug: { contains: search, mode: 'insensitive' as const } }
+      ? {
+          translations: {
+            some: {
+              locale: 'en',
+              name: { contains: search, mode: 'insensitive' as const },
+            },
+          },
+        }
       : {};
 
     const [tags, total] = await Promise.all([
@@ -36,62 +54,60 @@ export class AdminTagService {
               seo_title: true,
               seo_description: true,
               status: true,
+              updated_at: true,
             },
           },
           _count: { select: { entries: true } },
         },
         skip,
         take: limit,
-        orderBy: { slug: 'asc' },
+        orderBy: { id: 'asc' },
       }),
       this.prisma.tag.count({ where }),
     ]);
 
     return {
-      data: tags.map((t) => ({
-        id: t.id,
-        slug: t.slug,
-        type: t.type,
-        color_hex: t.color_hex,
-        translations: t.translations,
-        entry_count: t._count.entries,
-      })),
+      data: tags.map((t) => {
+        // Use the most recently updated translation as the "updated at" for the tag
+        const latestUpdated = t.translations.reduce<Date | null>((max, tr) => {
+          const d = (tr as unknown as { updated_at?: Date }).updated_at;
+          if (!d) return max;
+          return max === null || d > max ? d : max;
+        }, null);
+        return {
+          id: t.id,
+          translations: t.translations,
+          entry_count: t._count.entries,
+          updated_at: latestUpdated ?? null,
+        };
+      }),
       meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
     };
   }
 
-  async findOne(slug: string) {
+  async findOne(id: string) {
     const tag = await this.prisma.tag.findUnique({
-      where: { slug },
+      where: { id },
       include: {
         translations: { orderBy: { locale: 'asc' } },
         _count: { select: { entries: true } },
       },
     });
-    if (!tag) throw new NotFoundException(`Tag '${slug}' not found`);
+    if (!tag) throw new NotFoundException(`Tag '${id}' not found`);
     return { data: tag };
   }
 
   async create(dto: CreateTagDto) {
-    const existing = await this.prisma.tag.findUnique({
-      where: { slug: dto.slug },
-      select: { id: true },
-    });
-    if (existing) {
-      throw new ConflictException(`Tag with slug '${dto.slug}' already exists`);
-    }
+    const enSlug = dto.slug_en ?? toSlug(dto.name_en);
 
     const tag = await this.prisma.tag.create({
       data: {
-        slug: dto.slug,
-        type: dto.type as never ?? null,
-        color_hex: dto.color_hex ?? null,
         translations: {
           create: {
             locale: 'en',
-            slug: dto.slug_en ?? dto.slug,
+            slug: enSlug,
             name: dto.name_en,
-            status: 'draft',
+            status: 'published',
           },
         },
       },
@@ -101,33 +117,28 @@ export class AdminTagService {
     return { data: tag };
   }
 
-  async update(slug: string, dto: UpdateTagDto) {
-    await this.assertExists(slug);
-    const tag = await this.prisma.tag.update({
-      where: { slug },
-      data: {
-        ...(dto.type !== undefined && { type: dto.type as never }),
-        ...(dto.color_hex !== undefined && { color_hex: dto.color_hex }),
-      },
-    });
+  async update(id: string, _dto: UpdateTagDto) {
+    await this.assertExists(id);
+    // No language-independent fields on Tag. Updates go via upsertTranslation.
+    const tag = await this.prisma.tag.findUnique({ where: { id } });
     return { data: tag };
   }
 
-  async delete(slug: string) {
+  async delete(id: string) {
     const tag = await this.prisma.tag.findUnique({
-      where: { slug },
+      where: { id },
       include: { _count: { select: { entries: true } } },
     });
-    if (!tag) throw new NotFoundException(`Tag '${slug}' not found`);
+    if (!tag) throw new NotFoundException(`Tag '${id}' not found`);
 
     if (tag._count.entries > 0) {
       throw new BadRequestException(
-        `Cannot delete tag '${slug}' — it is assigned to ${tag._count.entries} entr${tag._count.entries === 1 ? 'y' : 'ies'}. Remove all assignments first.`,
+        `Cannot delete tag '${id}' — it is assigned to ${tag._count.entries} entr${tag._count.entries === 1 ? 'y' : 'ies'}. Remove all assignments first.`,
       );
     }
 
-    await this.prisma.tag.delete({ where: { slug } });
-    return { data: { slug, deleted: true } };
+    await this.prisma.tag.delete({ where: { id } });
+    return { data: { id, deleted: true } };
   }
 
   // ---------------------------------------------------------------------------
@@ -135,20 +146,20 @@ export class AdminTagService {
   // ---------------------------------------------------------------------------
 
   async upsertTranslation(
-    slug: string,
+    id: string,
     locale: string,
     dto: UpsertTagTranslationDto,
   ) {
     const tag = await this.prisma.tag.findUnique({
-      where: { slug },
+      where: { id },
       select: { id: true },
     });
-    if (!tag) throw new NotFoundException(`Tag '${slug}' not found`);
+    if (!tag) throw new NotFoundException(`Tag '${id}' not found`);
 
     const translation = await this.prisma.tagTranslation.upsert({
-      where: { tag_id_locale: { tag_id: tag.id, locale } },
+      where: { tag_id_locale: { tag_id: id, locale } },
       create: {
-        tag_id: tag.id,
+        tag_id: id,
         locale,
         slug: dto.slug,
         name: dto.name,
@@ -171,32 +182,28 @@ export class AdminTagService {
   }
 
   // ---------------------------------------------------------------------------
-  // Entry tag assignment
+  // Entry tag assignment — accepts tag IDs
   // ---------------------------------------------------------------------------
 
-  async assignEntryTags(entryId: string, slugs: string[]) {
-    // Verify entry exists
+  async assignEntryTags(entryId: string, tagIds: string[]) {
     const entry = await this.prisma.entry.findUnique({
       where: { id: entryId },
       select: { id: true },
     });
     if (!entry) throw new NotFoundException(`Entry '${entryId}' not found`);
 
-    // Resolve slugs → tag IDs, fail fast on unknown slugs
+    // Verify all IDs exist
     const tags = await this.prisma.tag.findMany({
-      where: { slug: { in: slugs } },
-      select: { id: true, slug: true },
+      where: { id: { in: tagIds } },
+      select: { id: true },
     });
 
-    const foundSlugs = new Set(tags.map((t) => t.slug));
-    const missing = slugs.filter((s) => !foundSlugs.has(s));
+    const foundIds = new Set(tags.map((t) => t.id));
+    const missing = tagIds.filter((id) => !foundIds.has(id));
     if (missing.length > 0) {
-      throw new BadRequestException(
-        `Unknown tag slug(s): ${missing.join(', ')}`,
-      );
+      throw new BadRequestException(`Unknown tag ID(s): ${missing.join(', ')}`);
     }
 
-    // Replace current set atomically
     await this.prisma.$transaction([
       this.prisma.entryTag.deleteMany({ where: { entry_id: entryId } }),
       this.prisma.entryTag.createMany({
@@ -205,23 +212,18 @@ export class AdminTagService {
       }),
     ]);
 
-    return {
-      data: {
-        entry_id: entryId,
-        tags: tags.map((t) => t.slug),
-      },
-    };
+    return { data: { entry_id: entryId, tag_ids: tags.map((t) => t.id) } };
   }
 
   // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
 
-  private async assertExists(slug: string): Promise<void> {
+  private async assertExists(id: string): Promise<void> {
     const exists = await this.prisma.tag.findUnique({
-      where: { slug },
+      where: { id },
       select: { id: true },
     });
-    if (!exists) throw new NotFoundException(`Tag '${slug}' not found`);
+    if (!exists) throw new NotFoundException(`Tag '${id}' not found`);
   }
 }

@@ -63,12 +63,6 @@ enum MediaType {
   chart
 }
 
-enum TagType {
-  fiber_type
-  needle_type
-  garment_part
-  style_tradition
-}
 
 enum ContributionType {
   entry
@@ -242,9 +236,6 @@ model EntryCategory {
 model Tag {
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   /// Canonical English kebab-case identifier — never changes (e.g. "wool", "dpn", "fair-isle")
-  slug      String   @unique
-  type      TagType?
-  color_hex String?
 
   entries      EntryTag[]
   articles     ArticleTag[]

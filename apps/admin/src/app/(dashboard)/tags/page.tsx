@@ -11,33 +11,24 @@ import {
   Pencil,
   Trash2,
   FileX,
-  Tag,
-  Layers,
-  Scissors,
-  Shirt,
-  Globe,
+  Tags,
+  ChevronDown,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { adminTagsApi } from '@/lib/api/tags';
-import type { AdminTag, AdminTagListParams, TagType } from '@/lib/api/tags';
+import type { AdminTag, AdminTagListParams } from '@/lib/api/tags';
 import { ApiError } from '@/lib/api/client';
 
-import { TagTypeBadge } from '@/components/tags/tag-type-badge';
 import { PageHeader } from '@/components/layout/page-header';
-import { Pagination } from '@/components/ui/pagination';
-
+import { LanguageBadges } from '@/components/ui/language-badges';
+import { Pagination, TableFooterBar } from '@/components/ui/pagination';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -50,62 +41,46 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
 
 // ---------------------------------------------------------------------------
-// Summary helper (exported for property testing)
-// ---------------------------------------------------------------------------
-
-export interface TagSummary {
-  fiber_type: number;
-  needle_type: number;
-  garment_part: number;
-  style_tradition: number;
-  total: number;
-}
-
-export function computeTagSummary(tags: AdminTag[]): TagSummary {
-  const fiber_type      = tags.filter((t) => t.type === 'fiber_type').length;
-  const needle_type     = tags.filter((t) => t.type === 'needle_type').length;
-  const garment_part    = tags.filter((t) => t.type === 'garment_part').length;
-  const style_tradition = tags.filter((t) => t.type === 'style_tradition').length;
-  return {
-    fiber_type,
-    needle_type,
-    garment_part,
-    style_tradition,
-    total: tags.length,
-  };
-}
-
-// ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const DEFAULT_PAGE_SIZE = 10;
+const DEFAULT_PAGE_SIZE = 20;
 
-const TYPE_OPTIONS: { value: TagType | 'all'; label: string }[] = [
-  { value: 'all',             label: 'All Types' },
-  { value: 'fiber_type',      label: 'Fiber Type' },
-  { value: 'needle_type',     label: 'Needle Type' },
-  { value: 'garment_part',    label: 'Garment Part' },
-  { value: 'style_tradition', label: 'Style Tradition' },
-];
+const STATUS_STYLES: Record<string, string> = {
+  published: 'bg-green-50 text-green-700 border-green-200',
+  reviewed:  'bg-yellow-50 text-yellow-700 border-yellow-200',
+  draft:     'bg-slate-100 text-slate-600 border-slate-200',
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 function getTagName(tag: AdminTag): string {
-  const translations = tag.translations ?? [];
   return (
-    translations.find((t) => t.locale === 'en')?.name ??
-    translations[0]?.name ??
+    tag.translations.find((t) => t.locale === 'en')?.name ??
+    tag.translations[0]?.name ??
     '—'
   );
+}
+
+/** EN translation status — representative status for the tag row */
+function getEnStatus(tag: AdminTag): string {
+  return tag.translations.find((t) => t.locale === 'en')?.status ?? 'draft';
+}
+
+function formatDate(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 // ---------------------------------------------------------------------------
@@ -117,11 +92,11 @@ function SkeletonRows() {
     <>
       {Array.from({ length: 5 }).map((_, i) => (
         <TableRow key={i}>
-          <TableCell><Skeleton className="h-4 w-40" /></TableCell>
-          <TableCell><Skeleton className="h-4 w-28 font-mono" /></TableCell>
-          <TableCell><Skeleton className="h-5 w-28 rounded-full" /></TableCell>
-          <TableCell><Skeleton className="h-4 w-8 rounded-full" /></TableCell>
-          <TableCell><Skeleton className="h-4 w-10" /></TableCell>
+          <TableCell><Skeleton className="h-4 w-4" /></TableCell>
+          <TableCell><Skeleton className="h-4 w-44" /></TableCell>
+          <TableCell><Skeleton className="h-5 w-20 rounded-full" /></TableCell>
+          <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+          <TableCell><div className="flex gap-1"><Skeleton className="h-5 w-6 rounded" /><Skeleton className="h-5 w-6 rounded" /></div></TableCell>
           <TableCell><Skeleton className="h-8 w-8 rounded" /></TableCell>
         </TableRow>
       ))}
@@ -137,36 +112,23 @@ export default function TagsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  // Filter state
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
-  const [typeFilter, setTypeFilter] = useState<TagType | 'all'>('all');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
-
-  // Dialog state
   const [deleteTarget, setDeleteTarget] = useState<AdminTag | null>(null);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  // Debounce search — reset page on query change
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setSearch(searchInput);
-      setPage(1);
-    }, 300);
+    const timer = setTimeout(() => { setSearch(searchInput); setPage(1); }, 300);
     return () => clearTimeout(timer);
   }, [searchInput]);
 
-  // Reset page when type filter changes
-  useEffect(() => {
-    setPage(1);
-  }, [typeFilter]);
-
-  // Build query params
   const params: AdminTagListParams = {
     page,
     limit: pageSize,
     ...(search ? { search } : {}),
-    ...(typeFilter !== 'all' ? { type: typeFilter } : {}),
   };
 
   const { data, isLoading } = useQuery({
@@ -178,31 +140,11 @@ export default function TagsPage() {
   const total = data?.meta?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
-  // Summary query — independent of filters, always fetches all tags
-  const {
-    data: summaryData,
-    isLoading: summaryLoading,
-    isError: summaryError,
-  } = useQuery({
-    queryKey: ['tags-summary'],
-    queryFn: () => adminTagsApi.listTags({ limit: 1000 }),
-  });
-
-  useEffect(() => {
-    if (summaryError) {
-      toast.error('Failed to load tag summary');
-    }
-  }, [summaryError]);
-
-  const summary = summaryData ? computeTagSummary(summaryData.data ?? []) : null;
-
-  // Delete mutation
   const deleteMutation = useMutation({
-    mutationFn: (slug: string) => adminTagsApi.deleteTag(slug),
+    mutationFn: (id: string) => adminTagsApi.deleteTag(id),
     onSuccess: () => {
       toast.success('Tag deleted');
       queryClient.invalidateQueries({ queryKey: ['tags'] });
-      queryClient.invalidateQueries({ queryKey: ['tags-summary'] });
       setDeleteTarget(null);
     },
     onError: (err) => {
@@ -217,164 +159,82 @@ export default function TagsPage() {
     },
   });
 
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      const results = await Promise.allSettled(ids.map((id) => adminTagsApi.deleteTag(id)));
+      const failed = results.filter((r) => r.status === 'rejected').length;
+      if (failed > 0) throw new Error(`${failed} tag(s) could not be deleted`);
+    },
+    onSuccess: () => {
+      toast.success(`${selectedIds.size} tag(s) deleted`);
+      setSelectedIds(new Set());
+      setBulkDeleteOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['tags'] });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message ?? 'Failed to delete some tags');
+      setBulkDeleteOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['tags'] });
+    },
+  });
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === tags.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(tags.map((t) => t.id)));
+    }
+  }
+
   return (
     <div className="space-y-6">
-      {/* Page header */}
       <PageHeader
         title="Tags"
         description="Manage tags for filtering and organizing entries"
       >
-        <Button
-          variant="outline"
-          className="gap-2 border-violet-500 text-violet-600 hover:bg-violet-50 hover:text-violet-700"
-        >
-          <Search size={16} aria-hidden="true" />
-          Filters
-        </Button>
         <Button asChild className="gap-2 bg-violet-600 hover:bg-violet-700 text-white">
           <Link href="/tags/new">
             <Plus size={16} aria-hidden="true" />
-            Add
+            Add tag
           </Link>
         </Button>
       </PageHeader>
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-        {/* Fiber Type */}
-        <Card>
-          <CardContent className="flex items-center gap-3 p-4">
-            <div className="rounded-lg bg-purple-50 p-2 text-purple-600">
-              <Scissors size={18} aria-hidden="true" />
-            </div>
+      {/* Stats */}
+      <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-5 py-3">
+          <div className="rounded-lg bg-violet-50 p-2 text-violet-600">
+            <Tags size={18} aria-hidden="true" />
+          </div>
+          {isLoading ? (
+            <Skeleton className="h-6 w-12" />
+          ) : (
             <div>
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Fiber</p>
-              {summaryLoading ? (
-                <Skeleton className="mt-1 h-6 w-10" />
-              ) : (
-                <p className="text-xl font-semibold text-slate-800">
-                  {summaryError ? '—' : (summary?.fiber_type ?? '—')}
-                </p>
-              )}
+              <p className="text-xl font-bold text-slate-800">{total}</p>
+              <p className="text-xs text-slate-500">Total Tags</p>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Needle Type */}
-        <Card>
-          <CardContent className="flex items-center gap-3 p-4">
-            <div className="rounded-lg bg-violet-50 p-2 text-violet-600">
-              <Tag size={18} aria-hidden="true" />
-            </div>
-            <div>
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Needle</p>
-              {summaryLoading ? (
-                <Skeleton className="mt-1 h-6 w-10" />
-              ) : (
-                <p className="text-xl font-semibold text-slate-800">
-                  {summaryError ? '—' : (summary?.needle_type ?? '—')}
-                </p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Garment Part */}
-        <Card>
-          <CardContent className="flex items-center gap-3 p-4">
-            <div className="rounded-lg bg-amber-50 p-2 text-amber-600">
-              <Shirt size={18} aria-hidden="true" />
-            </div>
-            <div>
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Garment</p>
-              {summaryLoading ? (
-                <Skeleton className="mt-1 h-6 w-10" />
-              ) : (
-                <p className="text-xl font-semibold text-slate-800">
-                  {summaryError ? '—' : (summary?.garment_part ?? '—')}
-                </p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Style Tradition */}
-        <Card>
-          <CardContent className="flex items-center gap-3 p-4">
-            <div className="rounded-lg bg-green-50 p-2 text-green-600">
-              <Globe size={18} aria-hidden="true" />
-            </div>
-            <div>
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Style</p>
-              {summaryLoading ? (
-                <Skeleton className="mt-1 h-6 w-10" />
-              ) : (
-                <p className="text-xl font-semibold text-slate-800">
-                  {summaryError ? '—' : (summary?.style_tradition ?? '—')}
-                </p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Total */}
-        <Card>
-          <CardContent className="flex items-center gap-3 p-4">
-            <div className="rounded-lg bg-slate-100 p-2 text-slate-600">
-              <Layers size={18} aria-hidden="true" />
-            </div>
-            <div>
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Total</p>
-              {summaryLoading ? (
-                <Skeleton className="mt-1 h-6 w-10" />
-              ) : (
-                <p className="text-xl font-semibold text-slate-800">
-                  {summaryError ? '—' : (summary?.total ?? '—')}
-                </p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+          )}
+        </div>
       </div>
 
-      {/* Filter bar */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex flex-wrap gap-3">
-            {/* Search */}
-            <div className="relative flex-1 min-w-[200px]">
-              <Search
-                size={15}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-                aria-hidden="true"
-              />
-              <Input
-                placeholder="Search by slug…"
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-
-            {/* Type filter */}
-            <Select
-              value={typeFilter}
-              onValueChange={(v) => setTypeFilter(v as TagType | 'all')}
-            >
-              <SelectTrigger className="w-[180px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {TYPE_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Search */}
+      <div className="relative w-[260px]">
+        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+        <Input
+          placeholder="Search tags..."
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          className="pl-9"
+        />
+      </div>
 
       {/* Table */}
       <Card>
@@ -382,12 +242,19 @@ export default function TagsPage() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10">
+                  <Checkbox
+                    checked={tags.length > 0 && selectedIds.size === tags.length}
+                    indeterminate={selectedIds.size > 0 && selectedIds.size < tags.length}
+                    onChange={toggleSelectAll}
+                    aria-label="Select all"
+                  />
+                </TableHead>
                 <TableHead>Name</TableHead>
-                <TableHead>Slug</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Color</TableHead>
-                <TableHead>Entries</TableHead>
-                <TableHead className="w-12" />
+                <TableHead>Status</TableHead>
+                <TableHead>Updated</TableHead>
+                <TableHead>Languages</TableHead>
+                <TableHead className="w-12">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -400,106 +267,144 @@ export default function TagsPage() {
                       <FileX size={36} className="mb-3" aria-hidden="true" />
                       <p className="text-sm font-medium">No tags found</p>
                       <p className="text-xs mt-1">
-                        {search || typeFilter !== 'all'
-                          ? 'Try adjusting your filters or search query'
-                          : 'Create your first tag to get started'}
+                        {search ? 'Try adjusting your search' : 'Create your first tag to get started'}
                       </p>
                     </div>
                   </TableCell>
                 </TableRow>
               ) : (
-                tags.map((tag) => (
-                  <TableRow
-                    key={tag.slug}
-                    className="cursor-pointer"
-                    onClick={() => router.push(`/tags/${tag.slug}`)}
-                  >
-                    <TableCell className="font-medium text-slate-700 max-w-[200px] truncate">
-                      {getTagName(tag)}
-                    </TableCell>
-                    <TableCell className="font-mono text-xs text-slate-500">
-                      {tag.slug}
-                    </TableCell>
-                    <TableCell>
-                      <TagTypeBadge type={tag.type} />
-                    </TableCell>
-                    <TableCell>
-                      {tag.color_hex ? (
-                        <span
-                          className="inline-block h-4 w-4 rounded-full border border-slate-200"
-                          style={{ backgroundColor: tag.color_hex }}
-                          title={tag.color_hex}
-                          aria-label={`Color: ${tag.color_hex}`}
-                        />
-                      ) : (
-                        <span className="text-slate-400 text-xs">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-slate-600 text-sm">
-                      {tag.entry_count}
-                    </TableCell>
-                    <TableCell
-                      onClick={(e) => e.stopPropagation()}
-                      className="text-right"
+                tags.map((tag) => {
+                  const enStatus = getEnStatus(tag);
+                  const locales = tag.translations.map((t) => t.locale);
+                  return (
+                    <TableRow
+                      key={tag.id}
+                      className="cursor-pointer"
+                      onClick={() => router.push(`/tags/${tag.id}`)}
+                      data-selected={selectedIds.has(tag.id) || undefined}
                     >
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            aria-label="Row actions"
-                          >
-                            <MoreHorizontal size={16} aria-hidden="true" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            onClick={() => router.push(`/tags/${tag.slug}`)}
-                          >
-                            <Pencil size={14} aria-hidden="true" />
-                            Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            className="text-red-600 focus:text-red-600"
-                            onClick={() => setDeleteTarget(tag)}
-                          >
-                            <Trash2 size={14} aria-hidden="true" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))
+                      {/* Checkbox */}
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={selectedIds.has(tag.id)}
+                          onChange={() => toggleSelect(tag.id)}
+                          aria-label={`Select ${getTagName(tag)}`}
+                        />
+                      </TableCell>
+
+                      {/* Name */}
+                      <TableCell className="font-medium text-slate-700">
+                        {getTagName(tag)}
+                      </TableCell>
+
+                      {/* Status — based on EN translation */}
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className={STATUS_STYLES[enStatus] ?? STATUS_STYLES.draft}
+                        >
+                          {enStatus.charAt(0).toUpperCase() + enStatus.slice(1)}
+                        </Badge>
+                      </TableCell>
+
+                      {/* Updated */}
+                      <TableCell className="text-sm text-slate-600 whitespace-nowrap">
+                        {formatDate(tag.updated_at)}
+                      </TableCell>
+
+                      {/* Languages */}
+                      <TableCell>
+                        <LanguageBadges locales={locales} />
+                      </TableCell>
+
+                      {/* Actions */}
+                      <TableCell onClick={(e) => e.stopPropagation()} className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Row actions">
+                              <MoreHorizontal size={16} aria-hidden="true" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => router.push(`/tags/${tag.id}`)}>
+                              <Pencil size={14} aria-hidden="true" /> Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-red-600 focus:text-red-600"
+                              onClick={() => setDeleteTarget(tag)}
+                            >
+                              <Trash2 size={14} aria-hidden="true" /> Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               )}
             </TableBody>
+            {!isLoading && tags.length > 0 && (
+              <TableFooter className="bg-white border-t border-slate-200">
+                <tr>
+                  <td colSpan={6} className="p-0">
+                    <TableFooterBar
+                      selectedCount={selectedIds.size}
+                      pageSize={pageSize}
+                      onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
+                      bulkActions={
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm" className="h-8 gap-2 px-3 text-sm text-slate-500 border-slate-200">
+                              Actions <ChevronDown size={14} aria-hidden="true" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start">
+                            <DropdownMenuItem
+                              className="text-red-600 focus:text-red-600"
+                              onClick={() => setBulkDeleteOpen(true)}
+                            >
+                              <Trash2 size={14} aria-hidden="true" />
+                              Delete {selectedIds.size} tag{selectedIds.size !== 1 ? 's' : ''}
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      }
+                    />
+                  </td>
+                </tr>
+              </TableFooter>
+            )}
           </Table>
         </CardContent>
       </Card>
 
-      {/* Pagination */}
       <Pagination
         page={page}
         totalPages={totalPages}
         total={total}
         pageSize={pageSize}
         onPageChange={setPage}
-        onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
       />
 
-      {/* Delete confirm dialog */}
       <ConfirmDialog
         open={deleteTarget !== null}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
         title="Delete Tag"
         description={`Are you sure you want to delete "${deleteTarget ? getTagName(deleteTarget) : ''}"? This requires admin role and cannot be undone.`}
         confirmLabel="Delete"
-        onConfirm={() => {
-          if (deleteTarget) deleteMutation.mutate(deleteTarget.slug);
-        }}
+        onConfirm={() => { if (deleteTarget) deleteMutation.mutate(deleteTarget.id); }}
         loading={deleteMutation.isPending}
+      />
+
+      <ConfirmDialog
+        open={bulkDeleteOpen}
+        onOpenChange={(open) => !open && setBulkDeleteOpen(false)}
+        title={`Delete ${selectedIds.size} tag${selectedIds.size !== 1 ? 's' : ''}`}
+        description={`Are you sure you want to delete ${selectedIds.size} tag${selectedIds.size !== 1 ? 's' : ''}? Tags assigned to entries cannot be deleted. This action cannot be undone.`}
+        confirmLabel={`Delete ${selectedIds.size} tag${selectedIds.size !== 1 ? 's' : ''}`}
+        onConfirm={() => bulkDeleteMutation.mutate(Array.from(selectedIds))}
+        loading={bulkDeleteMutation.isPending}
       />
     </div>
   );

@@ -34,7 +34,8 @@ export interface Entry {
   entry_template?: {
     id: string;
     name: string;
-    blocks: Array<{ id: string; type: string; order: number; required: boolean }>;
+    blocks: Array<{ id: string; type: string; label?: string; order: number; required: boolean }>;
+    translations: Record<string, Record<string, Record<string, string>>>;
   } | null;
   origin_language: string;
   status: EntryStatus;

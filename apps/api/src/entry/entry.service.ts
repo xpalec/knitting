@@ -39,8 +39,14 @@ export class EntryService {
       };
     }
     if (tag) {
-      // tag filter uses canonical slug (locale-independent)
-      where['tags'] = { some: { tag: { slug: tag } } };
+      // filter by locale-specific TagTranslation slug
+      where['tags'] = {
+        some: {
+          tag: {
+            translations: { some: { locale, slug: tag } },
+          },
+        },
+      };
     }
     if (skillLevel) {
       where['metadata'] = { path: ['skill_level'], equals: skillLevel };
@@ -111,10 +117,8 @@ export class EntryService {
           };
         }),
         tags: e.tags.map((et) => ({
-          slug: et.tag.slug,
-          name: et.tag.translations[0]?.name ?? et.tag.slug,
-          type: et.tag.type,
-          color_hex: et.tag.color_hex,
+          id: et.tag.id,
+          name: et.tag.translations[0]?.name ?? '',
         })),
       };
     });
@@ -223,10 +227,8 @@ export class EntryService {
           };
         }),
         tags: entry.tags.map((et) => ({
-          slug: et.tag.slug,
-          name: et.tag.translations[0]?.name ?? et.tag.slug,
-          type: et.tag.type,
-          color_hex: et.tag.color_hex,
+          id: et.tag.id,
+          name: et.tag.translations[0]?.name ?? '',
         })),
         translations: entry.translations.map((t) => ({
           locale: t.locale,

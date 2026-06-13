@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+﻿import { Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateEntryTemplateDto } from './dto/create-entry-template.dto';
@@ -8,8 +8,47 @@ const SUPPORTED_LOCALES = ['en', 'pl'] as const;
 
 type TemplateTranslations = Record<string, Record<string, Record<string, string>>>;
 
+interface TemplateBlock {
+  id: string;
+  type: string;
+  label?: string;
+  order: number;
+  required: boolean;
+  [key: string]: unknown;
+}
+
+interface EntryBlock {
+  id: string;
+  visible?: boolean;
+  [key: string]: unknown;
+}
+
 function ensureBlockIds(blocks: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
   return blocks.map((b) => ({ id: randomUUID(), ...b }));
+}
+
+/**
+ * Merge new template block definitions into an entry's existing content_blocks snapshot.
+ * - Authoritative order and structure come from the template.
+ * - Per-entry `visible` flag is preserved for blocks that already exist.
+ * - Blocks removed from the template are dropped.
+ * - Blocks added to the template are inserted with visible: true.
+ */
+function mergeEntryBlocks(
+  templateBlocks: TemplateBlock[],
+  entryBlocks: EntryBlock[],
+): TemplateBlock[] {
+  return templateBlocks.map((tb) => {
+    const existing = entryBlocks.find((eb) => eb.id === tb.id);
+    return {
+      id: tb.id,
+      type: tb.type,
+      label: tb.label,
+      order: tb.order,
+      required: tb.required,
+      visible: existing?.visible ?? true,
+    };
+  });
 }
 
 function formatTemplate(t: {
@@ -85,7 +124,43 @@ export class AdminEntryTemplateService {
         ...(dto.translations !== undefined && { translations: dto.translations as never }),
       },
     });
+
+    // Propagate structural block changes to all entries linked to this template.
+    // Only runs when the blocks array was part of this update.
+    if (blocks !== undefined && blocks.length >= 0) {
+      await this.syncLinkedEntryBlocks(id, blocks as unknown as TemplateBlock[]);
+    }
+
     return { data: formatTemplate(row) };
+  }
+
+  /**
+   * For every entry linked to this template, rewrite content_blocks to match
+   * the new template block definitions while preserving per-entry `visible` flags.
+   */
+  private async syncLinkedEntryBlocks(
+    templateId: string,
+    newTemplateBlocks: TemplateBlock[],
+  ): Promise<void> {
+    const linkedEntries = await this.prisma.entry.findMany({
+      where: { entry_template_id: templateId },
+      select: { id: true, content_blocks: true },
+    });
+
+    if (linkedEntries.length === 0) return;
+
+    await this.prisma.$transaction(
+      linkedEntries.map((entry) => {
+        const currentBlocks = Array.isArray(entry.content_blocks)
+          ? (entry.content_blocks as EntryBlock[])
+          : [];
+        const merged = mergeEntryBlocks(newTemplateBlocks, currentBlocks);
+        return this.prisma.entry.update({
+          where: { id: entry.id },
+          data: { content_blocks: merged as never },
+        });
+      }),
+    );
   }
 
   async upsertTranslation(
@@ -141,3 +216,4 @@ export class AdminEntryTemplateService {
     return { data: { id, deleted: true } };
   }
 }
+

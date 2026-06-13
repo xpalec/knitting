@@ -15,6 +15,11 @@ export class TemplateBlockItemDto {
   @MinLength(1)
   declare type: string;
 
+  @ApiPropertyOptional({ example: 'Introduction', description: 'User-editable display name for this block slot', maxLength: 255 })
+  @IsOptional()
+  @IsString()
+  label?: string;
+
   @ApiProperty({ example: 1, description: '1-based position in the template block list' })
   @IsInt()
   @Min(1)

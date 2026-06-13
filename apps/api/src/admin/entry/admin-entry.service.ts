@@ -121,7 +121,6 @@ export class AdminEntryService {
               tag: {
                 select: {
                   id: true,
-                  slug: true,
                   translations: {
                     where: { locale: 'en' },
                     select: { name: true },
@@ -150,7 +149,7 @@ export class AdminEntryService {
 
         const tags = e.tags.map((et) => ({
           id: et.tag.id,
-          name: et.tag.translations[0]?.name ?? et.tag.slug,
+          name: et.tag.translations[0]?.name ?? '',
         }));
 
         const languages = [...new Set(e.translations.map((t) => t.locale))];
@@ -180,7 +179,7 @@ export class AdminEntryService {
     const entry = await this.prisma.entry.findUnique({
       where: { id },
       include: {
-        entry_template: { select: { id: true, name: true, blocks: true } },
+        entry_template: { select: { id: true, name: true, blocks: true, translations: true } },
         translations: true,
         media_assets: { orderBy: { sort_order: 'asc' } },
         pattern_usage: true,

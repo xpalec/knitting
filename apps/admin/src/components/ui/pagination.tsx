@@ -131,19 +131,23 @@ interface TableFooterBarProps {
   selectedCount?: number;
   pageSize: number;
   onPageSizeChange?: (size: number) => void;
+  bulkActions?: React.ReactNode;
 }
 
-export function TableFooterBar({ selectedCount = 0, pageSize, onPageSizeChange }: TableFooterBarProps) {
+export function TableFooterBar({ selectedCount = 0, pageSize, onPageSizeChange, bulkActions }: TableFooterBarProps) {
   return (
     <div className="flex items-center justify-between px-4 py-3">
-      {/* Left: selected count */}
-      <p className="text-sm text-slate-500">
-        {selectedCount > 0 ? (
-          <><span className="font-medium text-slate-700">{selectedCount}</span> selected</>
-        ) : (
-          <span className="invisible">0 selected</span> // keeps height stable
-        )}
-      </p>
+      {/* Left: selected count + bulk actions */}
+      <div className="flex items-center gap-3">
+        <p className="text-sm text-slate-500">
+          {selectedCount > 0 ? (
+            <><span className="font-medium text-slate-700">{selectedCount}</span> selected</>
+          ) : (
+            <span className="invisible">0 selected</span>
+          )}
+        </p>
+        {selectedCount > 0 && bulkActions}
+      </div>
 
       {/* Right: page size */}
       {onPageSizeChange && (

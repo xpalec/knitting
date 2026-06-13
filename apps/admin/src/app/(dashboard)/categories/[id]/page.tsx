@@ -118,7 +118,8 @@ export default function EditCategoryPage({
     },
     onSuccess: () => {
       toast.success('Category saved');
-      queryClient.invalidateQueries({ queryKey: ['category', id] });
+      queryClient.invalidateQueries({ queryKey: ['categories-all'] });
+      router.push('/categories');
     },
     onError: (err) => {
       if (err instanceof ApiError && err.status === 409) {

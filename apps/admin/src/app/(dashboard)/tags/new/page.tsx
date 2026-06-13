@@ -1,72 +1,82 @@
 'use client';
 
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { adminTagsApi } from '@/lib/api/tags';
-import { ApiError } from '@/lib/api/client';
-import { TagForm } from '@/components/tags/tag-form';
-import type { TagFormValues } from '@/components/tags/tag-form';
-import { Button } from '@/components/ui/button';
+import { TagForm, SUPPORTED_LOCALES } from '@/components/tags/tag-form';
+import type { TagFormValues, SupportedLocale } from '@/components/tags/tag-form';
 
 export default function NewTagPage() {
   const router = useRouter();
-  const [slugError, setSlugError] = useState<string | undefined>(undefined);
+  const [slugErrors, setSlugErrors] = useState<Partial<Record<SupportedLocale, string>>>({});
 
   const createMutation = useMutation({
-    mutationFn: (values: TagFormValues) =>
-      adminTagsApi.createTag({
-        slug: values.slug,
-        name_en: values.name_en,
-        slug_en: values.slug, // English translation slug defaults to the canonical slug
-        type: values.type || undefined,
-        color_hex: values.color_hex || undefined,
-      }),
-    onSuccess: (tag) => {
+    mutationFn: async (values: TagFormValues) => {
+      // Step 1: create the tag shell with EN name
+      const enLocale = values.locales.en;
+      const tag = await adminTagsApi.createTag({
+        name_en: enLocale.name.trim(),
+        slug_en: enLocale.slug.trim() || undefined,
+      });
+
+      // Step 2: upsert all locales (including EN to apply full form data over the seeded row)
+      const nonEnLocalesWithNames = SUPPORTED_LOCALES.filter(
+        (locale) => locale !== 'en' && values.locales[locale].name.trim(),
+      );
+
+      // Always upsert EN to apply description, SEO, status from the form
+      const enUpsert = adminTagsApi.upsertTranslation(tag.id, 'en', {
+        name: enLocale.name.trim(),
+        slug: enLocale.slug.trim() || tag.id,
+        ...(enLocale.description ? { description: enLocale.description } : {}),
+        ...(enLocale.seo_title.trim() ? { seo_title: enLocale.seo_title.trim() } : {}),
+        ...(enLocale.seo_description.trim() ? { seo_description: enLocale.seo_description.trim() } : {}),
+        status: enLocale.status,
+      });
+
+      await Promise.all([
+        enUpsert,
+        ...nonEnLocalesWithNames.map((locale) => {
+          const tab = values.locales[locale];
+          return adminTagsApi.upsertTranslation(tag.id, locale, {
+            name: tab.name.trim(),
+            slug: tab.slug.trim() || enLocale.slug.trim(),
+            ...(tab.description ? { description: tab.description } : {}),
+            ...(tab.seo_title.trim() ? { seo_title: tab.seo_title.trim() } : {}),
+            ...(tab.seo_description.trim() ? { seo_description: tab.seo_description.trim() } : {}),
+            status: tab.status,
+          });
+        }),
+      ]);
+
+      return tag;
+    },
+    onSuccess: () => {
       toast.success('Tag created');
-      router.push(`/tags/${tag.slug}`);
+      router.push('/tags');
     },
     onError: (error) => {
-      if (error instanceof ApiError && error.status === 409) {
-        setSlugError('This slug is already taken');
-      } else {
-        toast.error('Failed to create tag');
-      }
+      toast.error('Failed to create tag');
     },
   });
 
   function handleSubmit(values: TagFormValues) {
-    setSlugError(undefined);
+    setSlugErrors({});
     createMutation.mutate(values);
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="sm" asChild className="gap-1.5 text-slate-600">
-          <Link href="/tags">
-            <ArrowLeft size={16} aria-hidden="true" />
-            Back to Tags
-          </Link>
-        </Button>
-      </div>
-
-      <h1 className="text-2xl font-semibold text-slate-800">New Tag</h1>
-
-      <div className="mx-auto max-w-2xl">
-        <TagForm
-          submitLabel="Create Tag"
-          slugReadOnly={false}
-          isSubmitting={createMutation.isPending}
-          slugError={slugError}
-          onSubmit={handleSubmit}
-          onCancel={() => router.push('/tags')}
-        />
-      </div>
+    <div className="p-6">
+      <TagForm
+        isSubmitting={createMutation.isPending}
+        slugErrors={slugErrors}
+        onSubmit={handleSubmit}
+        onCancel={() => router.push('/tags')}
+        title="New tag"
+      />
     </div>
   );
 }

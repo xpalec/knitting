@@ -28,7 +28,7 @@ export class EntryListQueryDto {
   @IsString()
   category?: string;
 
-  @ApiPropertyOptional({ example: 'wool', description: 'Filter by tag slug (canonical English identifier)' })
+  @ApiPropertyOptional({ example: 'wool', description: 'Filter by locale-specific tag slug (from TagTranslation)' })
   @IsOptional()
   @IsString()
   tag?: string;

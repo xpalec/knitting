@@ -2,9 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 export interface TagListItem {
-  slug: string;
-  type: string | null;
-  color_hex: string | null;
+  id: string;
   name: string;
   description: unknown | null;
   seo_title: string | null;
@@ -42,7 +40,7 @@ export class TagService {
           },
         },
       },
-      orderBy: { slug: 'asc' },
+      orderBy: { id: 'asc' },
     });
 
     return tags.map((tag) => {
@@ -52,10 +50,8 @@ export class TagService {
         null;
 
       return {
-        slug: tag.slug,
-        type: tag.type,
-        color_hex: tag.color_hex,
-        name: translation?.name ?? tag.slug,
+        id: tag.id,
+        name: translation?.name ?? '',
         description: translation?.description ?? null,
         seo_title: translation?.seo_title ?? null,
         seo_description: translation?.seo_description ?? null,

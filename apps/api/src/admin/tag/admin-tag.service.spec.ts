@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { AdminTagService } from './admin-tag.service.js';
 
 jest.mock('../../prisma/prisma.service.js', () => ({
@@ -44,101 +44,74 @@ describe('AdminTagService', () => {
     service = module.get<AdminTagService>(AdminTagService);
   });
 
-  // ---------------------------------------------------------------------------
-  // create
-  // ---------------------------------------------------------------------------
-
   describe('create', () => {
-    it('creates a tag with an English translation', async () => {
-      mockPrisma.tag.findUnique.mockResolvedValue(null);
+    it('creates a tag with an English translation (no slug required)', async () => {
       mockPrisma.tag.create.mockResolvedValue({
-        id: 'tag-1', slug: 'fair-isle', type: 'style_tradition', color_hex: '#228B22',
-        translations: [{ locale: 'en', name: 'Fair Isle', status: 'draft' }],
+        id: 'tag-1',
+        translations: [{ locale: 'en', slug: 'fair-isle', name: 'Fair Isle', status: 'draft' }],
       });
 
-      const result = await service.create({
-        slug: 'fair-isle', type: 'style_tradition', color_hex: '#228B22', name_en: 'Fair Isle',
-      });
+      const result = await service.create({ name_en: 'Fair Isle' });
 
-      expect(result.data.slug).toBe('fair-isle');
+      expect(result.data.id).toBe('tag-1');
       expect(mockPrisma.tag.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ slug: 'fair-isle' }),
+          data: expect.objectContaining({
+            translations: expect.objectContaining({
+              create: expect.objectContaining({ name: 'Fair Isle', locale: 'en' }),
+            }),
+          }),
         }),
       );
     });
 
-    it('throws ConflictException when slug already exists', async () => {
-      mockPrisma.tag.findUnique.mockResolvedValue({ id: 'existing' });
+    it('auto-derives en slug from name_en when slug_en is omitted', async () => {
+      mockPrisma.tag.create.mockResolvedValue({
+        id: 'tag-1',
+        translations: [{ locale: 'en', slug: 'fair-isle', name: 'Fair Isle', status: 'draft' }],
+      });
 
-      await expect(
-        service.create({ slug: 'wool', name_en: 'Wool' }),
-      ).rejects.toThrow(ConflictException);
+      await service.create({ name_en: 'Fair Isle' });
+
+      const call = mockPrisma.tag.create.mock.calls[0][0];
+      expect(call.data.translations.create.slug).toBe('fair-isle');
     });
   });
-
-  // ---------------------------------------------------------------------------
-  // update
-  // ---------------------------------------------------------------------------
-
-  describe('update', () => {
-    it('updates type and color_hex', async () => {
-      mockPrisma.tag.findUnique.mockResolvedValue({ id: 'tag-1' });
-      mockPrisma.tag.update.mockResolvedValue({ slug: 'wool', color_hex: '#FF0000' });
-
-      const result = await service.update('wool', { color_hex: '#FF0000' });
-
-      expect(result.data.color_hex).toBe('#FF0000');
-    });
-
-    it('throws NotFoundException for unknown slug', async () => {
-      mockPrisma.tag.findUnique.mockResolvedValue(null);
-      await expect(service.update('nonexistent', {})).rejects.toThrow(NotFoundException);
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // delete
-  // ---------------------------------------------------------------------------
 
   describe('delete', () => {
     it('deletes a tag with no entries', async () => {
       mockPrisma.tag.findUnique.mockResolvedValue({
-        id: 'tag-1', slug: 'dpn', _count: { entries: 0 },
+        id: 'tag-1', _count: { entries: 0 },
       });
-      mockPrisma.tag.delete.mockResolvedValue({ slug: 'dpn' });
+      mockPrisma.tag.delete.mockResolvedValue({ id: 'tag-1' });
 
-      const result = await service.delete('dpn');
+      const result = await service.delete('tag-1');
       expect(result.data.deleted).toBe(true);
     });
 
     it('throws BadRequestException when entries are assigned', async () => {
       mockPrisma.tag.findUnique.mockResolvedValue({
-        id: 'tag-1', slug: 'wool', _count: { entries: 5 },
+        id: 'tag-1', _count: { entries: 5 },
       });
 
-      await expect(service.delete('wool')).rejects.toThrow(BadRequestException);
+      await expect(service.delete('tag-1')).rejects.toThrow(BadRequestException);
     });
 
-    it('throws NotFoundException for unknown slug', async () => {
+    it('throws NotFoundException for unknown id', async () => {
       mockPrisma.tag.findUnique.mockResolvedValue(null);
       await expect(service.delete('nonexistent')).rejects.toThrow(NotFoundException);
     });
   });
 
-  // ---------------------------------------------------------------------------
-  // upsertTranslation
-  // ---------------------------------------------------------------------------
-
   describe('upsertTranslation', () => {
-    it('upserts a translation with all fields', async () => {
+    it('upserts a translation by tag id', async () => {
       mockPrisma.tag.findUnique.mockResolvedValue({ id: 'tag-1' });
       mockPrisma.tagTranslation.upsert.mockResolvedValue({
         tag_id: 'tag-1', locale: 'pl', name: 'Wełna',
         description: null, seo_title: null, seo_description: null, status: 'draft',
       });
 
-      const result = await service.upsertTranslation('wool', 'pl', { name: 'Wełna', slug: 'welna' });
+      const result = await service.upsertTranslation('tag-1', 'pl', { name: 'Wełna', slug: 'welna' });
 
       expect(result.data.name).toBe('Wełna');
       expect(mockPrisma.tagTranslation.upsert).toHaveBeenCalledWith(
@@ -148,7 +121,7 @@ describe('AdminTagService', () => {
       );
     });
 
-    it('throws NotFoundException for unknown tag slug', async () => {
+    it('throws NotFoundException for unknown tag id', async () => {
       mockPrisma.tag.findUnique.mockResolvedValue(null);
       await expect(
         service.upsertTranslation('nonexistent', 'pl', { name: 'Test', slug: 'test' }),
@@ -156,48 +129,44 @@ describe('AdminTagService', () => {
     });
   });
 
-  // ---------------------------------------------------------------------------
-  // assignEntryTags
-  // ---------------------------------------------------------------------------
-
   describe('assignEntryTags', () => {
-    it('replaces entry tags atomically', async () => {
+    it('replaces entry tags atomically using tag IDs', async () => {
       mockPrisma.entry.findUnique.mockResolvedValue({ id: 'entry-1' });
       mockPrisma.tag.findMany.mockResolvedValue([
-        { id: 'tag-1', slug: 'wool' },
-        { id: 'tag-2', slug: 'lace' },
+        { id: 'tag-1' },
+        { id: 'tag-2' },
       ]);
       mockPrisma.$transaction.mockResolvedValue([]);
 
-      const result = await service.assignEntryTags('entry-1', ['wool', 'lace']);
+      const result = await service.assignEntryTags('entry-1', ['tag-1', 'tag-2']);
 
-      expect(result.data.tags).toEqual(['wool', 'lace']);
+      expect(result.data.tag_ids).toEqual(['tag-1', 'tag-2']);
       expect(mockPrisma.$transaction).toHaveBeenCalled();
     });
 
-    it('throws BadRequestException for unknown tag slugs', async () => {
+    it('throws BadRequestException for unknown tag IDs', async () => {
       mockPrisma.entry.findUnique.mockResolvedValue({ id: 'entry-1' });
-      mockPrisma.tag.findMany.mockResolvedValue([{ id: 'tag-1', slug: 'wool' }]);
+      mockPrisma.tag.findMany.mockResolvedValue([{ id: 'tag-1' }]);
 
       await expect(
-        service.assignEntryTags('entry-1', ['wool', 'nonexistent']),
+        service.assignEntryTags('entry-1', ['tag-1', 'nonexistent']),
       ).rejects.toThrow(BadRequestException);
     });
 
     it('throws NotFoundException for unknown entry', async () => {
       mockPrisma.entry.findUnique.mockResolvedValue(null);
       await expect(
-        service.assignEntryTags('bad-id', ['wool']),
+        service.assignEntryTags('bad-id', ['tag-1']),
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('allows assigning an empty set (removes all tags)', async () => {
+    it('allows assigning an empty set', async () => {
       mockPrisma.entry.findUnique.mockResolvedValue({ id: 'entry-1' });
       mockPrisma.tag.findMany.mockResolvedValue([]);
       mockPrisma.$transaction.mockResolvedValue([]);
 
       const result = await service.assignEntryTags('entry-1', []);
-      expect(result.data.tags).toEqual([]);
+      expect(result.data.tag_ids).toEqual([]);
     });
   });
 });

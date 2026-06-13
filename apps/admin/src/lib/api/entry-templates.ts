@@ -20,6 +20,7 @@ export const LOCALE_LABELS: Record<Locale, string> = {
 export interface EntryTemplateBlock {
   id: string;
   type: string;
+  label?: string;   // user-editable display name, defaults to block type label
   order: number;
   required: boolean;
 }

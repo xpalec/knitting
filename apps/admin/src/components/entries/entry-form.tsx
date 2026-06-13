@@ -73,6 +73,7 @@ export interface BlockEditorState {
   _id: string;          // local React key
   blockId: string;      // stable template block UUID — used as key in Translation.blocks
   type: string;
+  label: string;        // per-block custom name from the template
   heading: string;
   headingManuallyEdited: boolean;
   content: unknown | null;
@@ -370,7 +371,8 @@ function BlockRow({ block, blockTypes, isSubmitting, onChange, onRemove }: Block
 
   // Resolve registered block type for label + color
   const registeredType = blockTypes?.find((bt) => bt.type === block.type);
-  const displayLabel = registeredType?.label ?? block.type;
+  const displayLabel = block.label || registeredType?.label || block.type;
+  const typeLabel = registeredType?.label ?? block.type;
   const typeColor = BLOCK_TYPE_COLORS[block.type] ?? BLOCK_TYPE_FALLBACK;
   // Use registered color if present, else fall back to palette
   const swatchBg = registeredType?.color ?? typeColor.bg;
@@ -384,7 +386,7 @@ function BlockRow({ block, blockTypes, isSubmitting, onChange, onRemove }: Block
         <GripVertical size={15} className="text-slate-300 shrink-0 cursor-grab" aria-hidden="true" />
 
         {/* Color swatch + block name/type */}
-        <div className="flex items-center gap-2 shrink-0 min-w-0 w-36">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
           <span
             className="h-5 w-5 rounded shrink-0"
             style={{ backgroundColor: swatchBg }}
@@ -392,18 +394,9 @@ function BlockRow({ block, blockTypes, isSubmitting, onChange, onRemove }: Block
           />
           <div className="min-w-0">
             <p className="text-xs font-semibold text-slate-700 truncate leading-tight">{displayLabel}</p>
-            <p className="text-[10px] text-slate-400 leading-tight">Rich text</p>
+            <p className="text-[10px] text-slate-400 leading-tight">{typeLabel}</p>
           </div>
         </div>
-
-        {/* Header text input — ghost, editable */}
-        <Input
-          value={block.heading}
-          onChange={(e) => onChange({ heading: e.target.value, headingManuallyEdited: true })}
-          placeholder="English header text can be changed"
-          disabled={isSubmitting}
-          className="flex-1 h-7 text-xs border-0 shadow-none focus-visible:ring-0 bg-transparent px-2 text-slate-500 placeholder:text-slate-300"
-        />
 
         {/* Required / Optional clickable badge */}
         <button
@@ -482,12 +475,25 @@ function BlockRow({ block, blockTypes, isSubmitting, onChange, onRemove }: Block
 
       {/* ── Editor body ──────────────────────────────────────────────── */}
       {expanded && (
-        <RichTextEditor
-          value={block.content}
-          onChange={(json) => onChange({ content: json })}
-          placeholder="Write content…"
-          disabled={isSubmitting}
-        />
+        <div className="px-4 pt-3 pb-4 space-y-3">
+          {/* Header input — sits above the editor, matching the design */}
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-slate-600">Header</label>
+            <Input
+              value={block.heading}
+              onChange={(e) => onChange({ heading: e.target.value, headingManuallyEdited: true })}
+              placeholder="English header text can be changed"
+              disabled={isSubmitting}
+              className="h-8 text-sm"
+            />
+          </div>
+          <RichTextEditor
+            value={block.content}
+            onChange={(json) => onChange({ content: json })}
+            placeholder="Write content…"
+            disabled={isSubmitting}
+          />
+        </div>
       )}
     </div>
   );
@@ -585,6 +591,7 @@ function LocaleTabContent({
                 _id: nextId(),
                 blockId: nextId(), // no template slot yet; will be assigned on save
                 type: 'rich_text',
+                label: 'Rich Text',
                 heading: '',
                 headingManuallyEdited: false,
                 content: null,
@@ -713,26 +720,26 @@ export function EntryForm({
     setEntryTemplateId(id);
     const tpl = templates?.find((t) => t.id === id);
     if (!tpl) return;
-    // Build BlockEditorState[] from the template's block list
-    const seededBlocks: BlockEditorState[] = tpl.blocks
-      .slice()
-      .sort((a, b) => a.order - b.order)
-      .map((b, i) => ({
-        _id: nextId(),
-        blockId: b.id,
-        type: b.type,
-        heading: '',
-        headingManuallyEdited: false,
-        content: null,
-        visible: true,
-        required: b.required,
-        order: i + 1,
-      }));
-    // Apply the same block scaffold to every locale tab
+    // Build BlockEditorState[] from the template's block list, per locale so headings are correct
     setLocales((prev) => {
       const next = { ...prev } as typeof prev;
       for (const locale of SUPPORTED_LOCALES) {
-        next[locale] = { ...next[locale], blocks: seededBlocks.map((b) => ({ ...b, _id: nextId() })) };
+        const localeBlocks: BlockEditorState[] = tpl.blocks
+          .slice()
+          .sort((a, b) => a.order - b.order)
+          .map((b, i) => ({
+            _id: nextId(),
+            blockId: b.id,
+            type: b.type,
+            label: b.label ?? b.type,
+            heading: tpl.translations?.[b.id]?.[locale]?.heading ?? '',
+            headingManuallyEdited: false,
+            content: null,
+            visible: true,
+            required: b.required,
+            order: i + 1,
+          }));
+        next[locale] = { ...next[locale], blocks: localeBlocks };
       }
       return next;
     });

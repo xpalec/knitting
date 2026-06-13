@@ -44,12 +44,16 @@ function mapEntryToFormValues(entry: Entry): EntryFormValues {
       .sort((a, b) => a.order - b.order)
       .map((slot) => {
         const saved = translationBlocks[slot.id];
+        // Use saved heading if present, otherwise fall back to the template's default for this locale
+        const templateTranslations = entry.entry_template?.translations ?? {};
+        const defaultHeading = templateTranslations[slot.id]?.[locale]?.heading ?? '';
         return {
           _id: nextId(),
           blockId: slot.id,
           type: slot.type,
-          heading: '',
-          headingManuallyEdited: false,
+          label: slot.label ?? slot.type,
+          heading: (saved as Record<string, string> | undefined)?.heading ?? defaultHeading,
+          headingManuallyEdited: Boolean((saved as Record<string, string> | undefined)?.heading),
           content: saved?.content ?? null,
           visible: true,
           required: slot.required,

@@ -86,11 +86,18 @@ export function toggleRequired(blocks: EntryTemplateBlock[], index: number): Ent
 }
 
 export function addBlock(blocks: EntryTemplateBlock[], type: string): EntryTemplateBlock[] {
-  return [...blocks, { id: crypto.randomUUID(), type, order: blocks.length + 1, required: false }];
+  const blockType = getBlockType(type);
+  return [...blocks, {
+    id: crypto.randomUUID(),
+    type,
+    label: blockType?.label ?? type,
+    order: blocks.length + 1,
+    required: false,
+  }];
 }
 
 // ---------------------------------------------------------------------------
-// Internal type â€” block with stable drag id
+// Internal type — block with stable drag id
 // ---------------------------------------------------------------------------
 
 interface BlockWithDndId extends EntryTemplateBlock {
@@ -130,7 +137,7 @@ export interface EntryTemplateFormProps {
 }
 
 // ---------------------------------------------------------------------------
-// Sortable block row â€” with inline collapsible translation fields
+// Sortable block row — with inline collapsible translation fields
 // ---------------------------------------------------------------------------
 
 interface BlockItemRowProps {
@@ -138,7 +145,10 @@ interface BlockItemRowProps {
   locale: string;
   translations: TemplateTranslations;
   isSubmitting?: boolean;
+  expanded: boolean;
+  onToggleExpanded: () => void;
   onToggleRequired: () => void;
+  onRename: (value: string) => void;
   onRemove: () => void;
   onFieldChange: (blockId: string, locale: string, fieldName: string, value: string) => void;
 }
@@ -148,19 +158,20 @@ function BlockItemRow({
   locale,
   translations,
   isSubmitting,
+  expanded,
+  onToggleExpanded,
   onToggleRequired,
+  onRename,
   onRemove,
   onFieldChange,
 }: BlockItemRowProps) {
-  const [expanded, setExpanded] = useState(false);
-
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: block._dndId,
   });
 
   const style = { transform: CSS.Transform.toString(transform), transition };
   const blockType = getBlockType(block.type);
-  const label = blockType?.label ?? block.type;
+  const typeLabel = blockType?.label ?? block.type;
   const colorBg = blockType?.color ?? '#EEEEF2';
   const isUnknown = !blockType;
   const hasTranslatableFields = (blockType?.translatableFields?.length ?? 0) > 0;
@@ -169,13 +180,10 @@ function BlockItemRow({
     <div
       ref={setNodeRef}
       style={style}
-      className={cn(
-        'bg-white',
-        isDragging && 'opacity-50 shadow-lg z-50 rounded-md',
-      )}
+      className={cn('bg-white', isDragging && 'opacity-50 shadow-lg z-50 rounded-md')}
     >
-      {/* â”€â”€ Main row â”€â”€ */}
-      <div className="flex items-center gap-3 px-4 py-3">
+      {/* Main row */}
+      <div className="flex items-center gap-3 px-4 py-2.5">
         {/* Drag handle */}
         <button
           type="button"
@@ -194,18 +202,28 @@ function BlockItemRow({
           aria-hidden="true"
         />
 
-        {/* Label */}
+        {/* Editable block name */}
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-slate-700 truncate">{label}</p>
-          {isUnknown ? (
-            <p className="flex items-center gap-1 text-xs text-amber-500">
+          <Input
+            value={block.label ?? typeLabel}
+            onChange={(e) => onRename(e.target.value)}
+            disabled={isSubmitting}
+            className="h-8 text-sm font-medium border-transparent bg-transparent shadow-none px-1 hover:border-slate-200 focus:border-slate-300 focus:bg-white transition-colors"
+            aria-label="Block name"
+            maxLength={255}
+          />
+          {isUnknown && (
+            <p className="flex items-center gap-1 text-xs text-amber-500 px-1 mt-0.5">
               <TriangleAlert size={11} aria-hidden="true" />
               Unknown block type
             </p>
-          ) : (
-            <p className="text-xs text-slate-400 truncate">{block.type}</p>
           )}
         </div>
+
+        {/* Block type badge */}
+        <span className="shrink-0 inline-flex items-center rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-500 font-medium">
+          {typeLabel}
+        </span>
 
         {/* Required / Optional toggle */}
         <button
@@ -226,11 +244,11 @@ function BlockItemRow({
           )}
         </button>
 
-        {/* Expand translation fields (only if block has translatable fields) */}
+        {/* Expand / collapse translation fields */}
         {hasTranslatableFields && (
           <button
             type="button"
-            onClick={() => setExpanded((v) => !v)}
+            onClick={onToggleExpanded}
             className="shrink-0 text-slate-400 hover:text-slate-600 transition-colors"
             aria-label={expanded ? 'Hide translation fields' : 'Show translation fields'}
             aria-expanded={expanded}
@@ -243,7 +261,7 @@ function BlockItemRow({
           </button>
         )}
 
-        {/* â‹® Actions */}
+        {/* Actions menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -266,7 +284,7 @@ function BlockItemRow({
         </DropdownMenu>
       </div>
 
-      {/* â”€â”€ Collapsible translation fields â”€â”€ */}
+      {/* Collapsible translation fields */}
       {expanded && hasTranslatableFields && (
         <div className="px-4 pb-4 pt-1 border-t border-slate-100 space-y-3 bg-slate-50/60">
           {blockType!.translatableFields.map((field) => (
@@ -292,7 +310,7 @@ function BlockItemRow({
 }
 
 // ---------------------------------------------------------------------------
-// Add block â€” combobox popover
+// Add block — combobox popover
 // ---------------------------------------------------------------------------
 
 function AddBlockRow({
@@ -323,7 +341,7 @@ function AddBlockRow({
       </PopoverTrigger>
       <PopoverContent className="p-0 w-[320px]" align="start" sideOffset={6}>
         <Command>
-          <CommandInput placeholder="Search block typesâ€¦" />
+          <CommandInput placeholder="Search block types..." />
           <CommandList>
             <CommandEmpty>No block types found.</CommandEmpty>
             <CommandGroup>
@@ -362,6 +380,7 @@ function BlockListWithTabs({
   sensors,
   onDragEnd,
   onToggleRequired,
+  onRename,
   onRemove,
   onFieldChange,
   onAdd,
@@ -372,23 +391,58 @@ function BlockListWithTabs({
   sensors: ReturnType<typeof useSensors>;
   onDragEnd: (event: DragEndEvent) => void;
   onToggleRequired: (dndId: string) => void;
+  onRename: (dndId: string, value: string) => void;
   onRemove: (dndId: string) => void;
   onFieldChange: (blockId: string, locale: string, fieldName: string, value: string) => void;
   onAdd: (type: string) => void;
 }) {
   const plainBlocks = stripDndIds(blocks);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
+  const allExpandable = blocks.filter((b) => {
+    const bt = getBlockType(b.type);
+    return (bt?.translatableFields?.length ?? 0) > 0;
+  });
+  const allExpanded = allExpandable.length > 0 && allExpandable.every((b) => expandedIds.has(b._dndId));
+
+  function toggleExpanded(dndId: string) {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(dndId)) next.delete(dndId);
+      else next.add(dndId);
+      return next;
+    });
+  }
+
+  function toggleExpandAll() {
+    if (allExpanded) {
+      setExpandedIds(new Set());
+    } else {
+      setExpandedIds(new Set(allExpandable.map((b) => b._dndId)));
+    }
+  }
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-4">
-      <div>
-        <p className="text-sm font-semibold text-slate-700">Template structure</p>
-        <p className="text-xs text-slate-400 mt-0.5">
-          Add blocks, set required/optional, and expand each block to fill in translation defaults
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-semibold text-slate-700">Template structure</p>
+          <p className="text-xs text-slate-400 mt-0.5">
+            Add blocks, rename them, set required/optional, and expand to fill in translation defaults
+          </p>
+        </div>
+        {allExpandable.length > 0 && (
+          <button
+            type="button"
+            onClick={toggleExpandAll}
+            className="text-xs text-violet-600 hover:text-violet-700 font-medium shrink-0"
+          >
+            {allExpanded ? 'Collapse all' : 'Expand all'}
+          </button>
+        )}
       </div>
 
       <Tabs defaultValue="en">
-        {/* Locale tab strip */}
         <TabsList variant="line" className="w-full justify-start">
           {SUPPORTED_LOCALES.map((locale) => {
             const status = deriveTemplateTranslationStatus({ blocks: plainBlocks, translations }, locale);
@@ -407,7 +461,6 @@ function BlockListWithTabs({
           })}
         </TabsList>
 
-        {/* One tab panel per locale â€” same block list, different translation values */}
         {SUPPORTED_LOCALES.map((locale) => (
           <TabsContent key={locale} value={locale} className="mt-4 space-y-3">
             {blocks.length > 0 ? (
@@ -421,7 +474,10 @@ function BlockListWithTabs({
                         locale={locale}
                         translations={translations}
                         isSubmitting={isSubmitting}
+                        expanded={expandedIds.has(block._dndId)}
+                        onToggleExpanded={() => toggleExpanded(block._dndId)}
                         onToggleRequired={() => onToggleRequired(block._dndId)}
+                        onRename={(value) => onRename(block._dndId, value)}
                         onRemove={() => onRemove(block._dndId)}
                         onFieldChange={onFieldChange}
                       />
@@ -484,9 +540,10 @@ export function EntryTemplateForm({
 
   function handleAddBlock(type: string) {
     const newId = crypto.randomUUID();
+    const blockType = getBlockType(type);
     setBlocks((prev) => [
       ...prev,
-      { id: newId, type, order: prev.length + 1, required: false, _dndId: nextDndId() },
+      { id: newId, type, label: blockType?.label ?? type, order: prev.length + 1, required: false, _dndId: nextDndId() },
     ]);
     setTranslations((t) => initBlockDefaults(t, newId));
   }
@@ -504,6 +561,12 @@ export function EntryTemplateForm({
   function handleToggleRequired(dndId: string) {
     setBlocks((prev) =>
       prev.map((b) => (b._dndId === dndId ? { ...b, required: !b.required } : b)),
+    );
+  }
+
+  function handleRenameBlock(dndId: string, value: string) {
+    setBlocks((prev) =>
+      prev.map((b) => (b._dndId === dndId ? { ...b, label: value } : b)),
     );
   }
 
@@ -541,7 +604,7 @@ export function EntryTemplateForm({
 
   return (
     <form onSubmit={handleSubmit} noValidate>
-      {/* â”€â”€ Title + action buttons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* Title + action buttons */}
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-slate-800">{displayTitle}</h1>
 
@@ -569,12 +632,12 @@ export function EntryTemplateForm({
             className="gap-2 bg-violet-600 hover:bg-violet-700 text-white"
           >
             <Save size={15} aria-hidden="true" />
-            {isSubmitting ? 'Savingâ€¦' : 'Save'}
+            {isSubmitting ? 'Saving...' : 'Save'}
           </Button>
         </div>
       </div>
 
-      {/* ── Content ───────────────────────────────────────────────── */}
+      {/* Content */}
       <div className="space-y-4">
 
         {/* Template details */}
@@ -589,7 +652,7 @@ export function EntryTemplateForm({
               id="template-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Technique – Step-by-Step Guide"
+              placeholder="e.g. Technique - Step-by-Step Guide"
               disabled={isSubmitting}
               maxLength={255}
             />
@@ -618,6 +681,7 @@ export function EntryTemplateForm({
           sensors={sensors}
           onDragEnd={handleDragEnd}
           onToggleRequired={handleToggleRequired}
+          onRename={handleRenameBlock}
           onRemove={handleRemoveBlock}
           onFieldChange={handleTranslationFieldChange}
           onAdd={handleAddBlock}

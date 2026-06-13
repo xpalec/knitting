@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
@@ -88,7 +88,7 @@ const STATUS_OPTIONS: { value: EntryStatus | 'all'; label: string }[] = [
 // ---------------------------------------------------------------------------
 
 // Maps the current statusFilter to the Tabs value prop.
-// 'deprecated' has no dedicated tab → use 'deprecated' so no TabsTrigger matches.
+// 'deprecated' has no dedicated tab â†’ use 'deprecated' so no TabsTrigger matches.
 const STATUS_TO_TAB: Record<EntryStatus | 'all', string> = {
   all:        'all',
   published:  'published',
@@ -192,7 +192,7 @@ function ChangeStatusDialog({
             Cancel
           </Button>
           <Button onClick={() => onConfirm(selected)} disabled={loading}>
-            {loading ? 'Saving…' : 'Save'}
+            {loading ? 'Savingâ€¦' : 'Save'}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -245,55 +245,6 @@ function formatDate(iso: string): string {
   });
 }
 
-// ---------------------------------------------------------------------------
-// Bulk Action Bar — shown when selectedIds.size > 0 (replaces TableFooterBar)
-// ---------------------------------------------------------------------------
-
-interface BulkActionBarProps {
-  selectedIds: Set<string>;
-  onStatusChange: (status: EntryStatus) => void;
-  onDeleteOpen: () => void;
-}
-
-function BulkActionBar({ selectedIds, onStatusChange, onDeleteOpen }: BulkActionBarProps) {
-  return (
-    <div className="flex items-center justify-between px-4 py-3">
-      <p className="text-sm font-medium text-slate-700">
-        {selectedIds.size} selected
-      </p>
-      <div className="flex items-center gap-2">
-        {/* Bulk status dropdown */}
-        <Select onValueChange={(v) => onStatusChange(v as EntryStatus)}>
-          <SelectTrigger className="w-[160px] h-8 text-sm">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="draft">Draft</SelectItem>
-            <SelectItem value="review">Needs review</SelectItem>
-            <SelectItem value="published">Published</SelectItem>
-            <SelectItem value="deprecated">Deprecated</SelectItem>
-          </SelectContent>
-        </Select>
-
-        {/* Actions dropdown */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="gap-1">
-              Actions <ChevronDown size={14} aria-hidden="true" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={onDeleteOpen}>
-              Delete selected
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -318,7 +269,7 @@ export default function EntriesPage() {
 
   function handleSort(key: string) {
     if (sortKey === key) {
-      // Cycle: asc → desc → unsorted
+      // Cycle: asc â†’ desc â†’ unsorted
       if (sortDirection === 'asc') setSortDirection('desc');
       else if (sortDirection === 'desc') { setSortKey(null); setSortDirection(null); }
       else setSortDirection('asc');
@@ -363,7 +314,7 @@ export default function EntriesPage() {
       return;
     }
 
-    // File is valid — actual import API not yet implemented
+    // File is valid â€” actual import API not yet implemented
     toast.success('File ready for import');
     if (importInputRef.current) importInputRef.current.value = '';
   }
@@ -377,7 +328,7 @@ export default function EntriesPage() {
     return () => clearTimeout(timer);
   }, [searchInput]);
 
-  // Summary queries — four parallel queries, independent of filter state
+  // Summary queries â€” four parallel queries, independent of filter state
   const summaryQueries = useQueries({
     queries: [
       {
@@ -501,12 +452,12 @@ export default function EntriesPage() {
     }
 
     if (failed === 0) {
-      // All succeeded — clear selection and refresh
+      // All succeeded â€” clear selection and refresh
       setSelectedIds(new Set());
       queryClient.invalidateQueries({ queryKey: ['entries'] });
       queryClient.invalidateQueries({ queryKey: ['entries-summary'] });
     } else {
-      // Partial failure — keep only failed IDs in selection, refresh list
+      // Partial failure â€” keep only failed IDs in selection, refresh list
       setSelectedIds(new Set(failedIds));
       queryClient.invalidateQueries({ queryKey: ['entries'] });
       queryClient.invalidateQueries({ queryKey: ['entries-summary'] });
@@ -586,7 +537,7 @@ export default function EntriesPage() {
           ) : (
             <div>
               <p className="text-xl font-bold text-slate-800">
-                {summaryQueries[0].isError ? '—' : (summaryQueries[0].data?.meta?.total ?? '—')}
+                {summaryQueries[0].isError ? 'â€”' : (summaryQueries[0].data?.meta?.total ?? 'â€”')}
               </p>
               <p className="text-xs text-slate-500">Total entries</p>
             </div>
@@ -603,7 +554,7 @@ export default function EntriesPage() {
           ) : (
             <div>
               <p className="text-xl font-bold text-slate-800">
-                {summaryQueries[1].isError ? '—' : (summaryQueries[1].data?.meta?.total ?? '—')}
+                {summaryQueries[1].isError ? 'â€”' : (summaryQueries[1].data?.meta?.total ?? 'â€”')}
               </p>
               <p className="text-xs text-slate-500">Published</p>
             </div>
@@ -620,7 +571,7 @@ export default function EntriesPage() {
           ) : (
             <div>
               <p className="text-xl font-bold text-slate-800">
-                {summaryQueries[2].isError ? '—' : (summaryQueries[2].data?.meta?.total ?? '—')}
+                {summaryQueries[2].isError ? 'â€”' : (summaryQueries[2].data?.meta?.total ?? 'â€”')}
               </p>
               <p className="text-xs text-slate-500">Drafts</p>
             </div>
@@ -637,7 +588,7 @@ export default function EntriesPage() {
           ) : (
             <div>
               <p className="text-xl font-bold text-slate-800">
-                {summaryQueries[3].isError ? '—' : (summaryQueries[3].data?.meta?.total ?? '—')}
+                {summaryQueries[3].isError ? 'â€”' : (summaryQueries[3].data?.meta?.total ?? 'â€”')}
               </p>
               <p className="text-xs text-slate-500">Needs review</p>
             </div>
@@ -675,7 +626,7 @@ export default function EntriesPage() {
               aria-hidden="true"
             />
             <Input
-              placeholder="Search entries…"
+              placeholder="Search entriesâ€¦"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               maxLength={200}
@@ -802,7 +753,7 @@ export default function EntriesPage() {
               {isLoading ? (
                 <SkeletonRows />
               ) : isError ? (
-                // Empty body — error toast already shown via useEffect
+                // Empty body â€” error toast already shown via useEffect
                 <></>
               ) : entries.length === 0 ? (
                 <TableRow>
@@ -823,7 +774,7 @@ export default function EntriesPage() {
                     className="cursor-pointer"
                     onClick={() => router.push(`/entries/${entry.id}`)}
                   >
-                    {/* Checkbox — stop propagation so click doesn't navigate */}
+                    {/* Checkbox â€” stop propagation so click doesn't navigate */}
                     <TableCell onClick={(e) => e.stopPropagation()}>
                       <Checkbox
                         checked={selectedIds.has(entry.id)}
@@ -839,15 +790,15 @@ export default function EntriesPage() {
                       />
                     </TableCell>
                     <TableCell className="font-medium text-slate-700 max-w-[220px] truncate">
-                      {entry.term ? entry.term : '—'}
+                      {entry.term ? entry.term : 'â€”'}
                     </TableCell>
                     <TableCell>
                       <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                        {entry.entry_template_name ?? '—'}
+                        {entry.entry_template_name ?? 'â€”'}
                       </span>
                     </TableCell>
                     <TableCell className="text-slate-500">
-                      {entry.category_name ?? '—'}
+                      {entry.category_name ?? 'â€”'}
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-wrap items-center gap-1">
@@ -875,7 +826,7 @@ export default function EntriesPage() {
                     <TableCell>
                       <LanguageBadges locales={entry.languages ?? []} />
                     </TableCell>
-                    {/* Actions — stop propagation so click doesn't navigate */}
+                    {/* Actions â€” stop propagation so click doesn't navigate */}
                     <TableCell
                       onClick={(e) => e.stopPropagation()}
                       className="text-right"
@@ -924,18 +875,38 @@ export default function EntriesPage() {
             <TableFooter className="bg-white border-t border-slate-200">
               <tr>
                 <td colSpan={9} className="p-0">
-                  {selectedIds.size > 0 ? (
-                    <BulkActionBar
-                      selectedIds={selectedIds}
-                      onStatusChange={handleBulkStatus}
-                      onDeleteOpen={() => setBulkDeleteOpen(true)}
-                    />
-                  ) : (
-                    <TableFooterBar
-                      pageSize={pageSize}
-                      onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
-                    />
-                  )}
+                  <TableFooterBar
+                    selectedCount={selectedIds.size}
+                    pageSize={pageSize}
+                    onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
+                    bulkActions={
+                      <div className="flex items-center gap-2">
+                        <Select onValueChange={(v) => handleBulkStatus(v as EntryStatus)}>
+                          <SelectTrigger className="h-8 w-[160px] text-sm text-slate-500 border-slate-200">
+                            <SelectValue placeholder="Set status..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="draft">Draft</SelectItem>
+                            <SelectItem value="review">Needs review</SelectItem>
+                            <SelectItem value="published">Published</SelectItem>
+                            <SelectItem value="deprecated">Deprecated</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm" className="h-8 gap-2 px-3 text-sm text-slate-500 border-slate-200">
+                              Actions <ChevronDown size={14} aria-hidden="true" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start">
+                            <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => setBulkDeleteOpen(true)}>
+                              Delete selected
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    }
+                  />
                 </td>
               </tr>
             </TableFooter>
@@ -960,9 +931,9 @@ export default function EntriesPage() {
         open={deleteTarget !== null}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
         title="Delete Entry"
-        description={`Are you sure you want to delete "${deleteTarget ? (deleteTarget.term ?? '—') : ''}"? This action cannot be undone.`}
+        description={`Are you sure you want to delete "${deleteTarget ? (deleteTarget.term ?? 'â€”') : ''}"? This action cannot be undone.`}
         confirmLabel="Delete"
-        loadingLabel="Deleting…"
+        loadingLabel="Deletingâ€¦"
         onConfirm={() => {
           if (deleteTarget) deleteMutation.mutate(deleteTarget.id);
         }}
@@ -976,7 +947,7 @@ export default function EntriesPage() {
         title="Delete Selected Entries"
         description={`Are you sure you want to delete ${selectedIds.size} entr${selectedIds.size === 1 ? 'y' : 'ies'}? This action cannot be undone.`}
         confirmLabel="Delete"
-        loadingLabel="Deleting…"
+        loadingLabel="Deletingâ€¦"
         onConfirm={handleBulkDelete}
         loading={false}
       />

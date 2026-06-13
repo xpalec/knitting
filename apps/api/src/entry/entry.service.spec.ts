@@ -52,7 +52,7 @@ describe('EntryService', () => {
           translations: [{ term: 'Knit stitch', slug: 'knit-stitch', metadata: { abbreviation: 'K' }, status: 'published' }],
           categories: [],
           tags: [
-            { tag: { slug: 'wool', type: 'fiber_type', color_hex: '#8B4513', translations: [{ name: 'Wool' }] } },
+            { tag: { id: 'tag-1', translations: [{ name: 'Wool' }] } },
           ],
         },
       ]);
@@ -65,7 +65,6 @@ describe('EntryService', () => {
       expect(result.data[0]?.abbreviation).toBe('K');
       expect(result.data[0]?.tags).toHaveLength(1);
       expect(result.data[0]?.tags[0]?.name).toBe('Wool');
-      expect(result.data[0]?.tags[0]?.slug).toBe('wool');
       expect(result.meta.total).toBe(1);
     });
 
@@ -78,7 +77,7 @@ describe('EntryService', () => {
           translations: [{ term: 'Knit stitch', slug: 'knit-stitch', metadata: {}, status: 'published' }],
           categories: [],
           tags: [
-            { tag: { slug: 'fair-isle', type: 'style_tradition', color_hex: '#228B22', translations: [] } },
+            { tag: { id: 'tag-1', translations: [] } },
           ],
         },
       ]);
@@ -86,8 +85,8 @@ describe('EntryService', () => {
 
       const result = await service.findAll({ locale: 'de' });
 
-      // No German translation — falls back to slug
-      expect(result.data[0]?.tags[0]?.name).toBe('fair-isle');
+      // No German translation — name is empty string
+      expect(result.data[0]?.tags[0]?.name).toBe('');
     });
 
     it('flags entries missing the requested locale translation', async () => {

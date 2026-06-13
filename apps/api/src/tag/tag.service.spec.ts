@@ -14,9 +14,6 @@ const mockPrisma = {
 const makeTags = () => [
   {
     id: 'tag-1',
-    slug: 'wool',
-    type: 'fiber_type',
-    color_hex: '#8B4513',
     translations: [
       { locale: 'en', name: 'Wool', description: null, seo_title: 'Wool knitting', seo_description: 'About wool', status: 'published' },
       { locale: 'pl', name: 'Wełna', description: null, seo_title: null, seo_description: null, status: 'published' },
@@ -25,9 +22,6 @@ const makeTags = () => [
   },
   {
     id: 'tag-2',
-    slug: 'lace',
-    type: 'style_tradition',
-    color_hex: '#DDA0DD',
     translations: [
       { locale: 'en', name: 'Lace', description: null, seo_title: null, seo_description: null, status: 'published' },
     ],
@@ -57,7 +51,6 @@ describe('TagService', () => {
 
       expect(result).toHaveLength(2);
       expect(result[0]?.name).toBe('Wełna');
-      expect(result[0]?.slug).toBe('wool');
       expect(result[0]?.entry_count).toBe(3);
     });
 
@@ -70,10 +63,10 @@ describe('TagService', () => {
       expect(result[1]?.name).toBe('Lace');
     });
 
-    it('falls back to slug when no translations exist at all', async () => {
+    it('returns empty string name when no translations exist', async () => {
       mockPrisma.tag.findMany.mockResolvedValue([
         {
-          id: 'tag-3', slug: 'dpn', type: 'needle_type', color_hex: null,
+          id: 'tag-3',
           translations: [],
           _count: { entries: 0 },
         },
@@ -81,7 +74,7 @@ describe('TagService', () => {
 
       const result = await service.findAll('en');
 
-      expect(result[0]?.name).toBe('dpn');
+      expect(result[0]?.name).toBe('');
     });
 
     it('includes seo_title and seo_description from the resolved translation', async () => {
