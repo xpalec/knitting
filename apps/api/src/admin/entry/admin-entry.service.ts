@@ -45,10 +45,16 @@ export class AdminEntryService {
             status: 'draft',
           },
         },
+        ...(dto.category_id && {
+          categories: {
+            create: { category_id: dto.category_id },
+          },
+        }),
       },
       include: {
         translations: true,
         entry_template: { select: { id: true, name: true } },
+        categories: { include: { category: true } },
       },
     });
 
@@ -213,6 +219,17 @@ export class AdminEntryService {
         entry_template: { select: { id: true, name: true } },
       },
     });
+
+    // Handle category update separately (replace the existing category)
+    if (dto.category_id !== undefined) {
+      await this.prisma.entryCategory.deleteMany({ where: { entry_id: id } });
+      if (dto.category_id) {
+        await this.prisma.entryCategory.create({
+          data: { entry_id: id, category_id: dto.category_id },
+        });
+      }
+    }
+
     await this.invalidateCacheForEntry(id);
     return { data: entry };
   }

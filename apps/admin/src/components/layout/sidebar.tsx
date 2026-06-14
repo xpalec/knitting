@@ -52,8 +52,6 @@ const NAV_SECTIONS: Array<{ label: string; items: NavItem[] }> = [
     items: [
       { label: 'Articles', href: '/articles', icon: FileText },
       { label: 'Video', href: '/video', icon: Video },
-      { label: 'Categories', href: '/content-categories', icon: Tag },
-      { label: 'Tags', href: '/content-tags', icon: Tags },
     ],
   },
   {

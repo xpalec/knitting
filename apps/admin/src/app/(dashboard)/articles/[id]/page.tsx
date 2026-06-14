@@ -1,62 +1,208 @@
 'use client';
 
-import { use } from 'react';
-import Link from 'next/link';
+import { use, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { articlesApi } from '@/lib/api/articles';
-import { ArticleForm } from '@/components/articles/article-form';
-import type { ArticleFormValues } from '@/components/articles/article-form';
+import type { Article, ArticleLocale, ArticleStatus } from '@/lib/api/articles';
+import { ARTICLE_SUPPORTED_LOCALES } from '@/lib/api/articles';
+import { ApiError } from '@/lib/api/client';
+import { useAuthStore } from '@/store/auth';
+
+import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { ArticleEditorForm } from '@/components/articles/article-editor-form';
+import type {
+  ArticleEditorFormValues,
+  ArticleBlockState,
+  ArticleLocaleTabState,
+} from '@/components/articles/article-editor-form';
+
+// ---------------------------------------------------------------------------
+// Helper: map API Article → ArticleEditorFormValues
+// ---------------------------------------------------------------------------
+
+let _idSeq = 5000;
+function nextId() { return `ae-${_idSeq++}`; }
+
+function mapArticleToFormValues(article: Article): ArticleEditorFormValues {
+  const locales = {} as Record<ArticleLocale, ArticleLocaleTabState>;
+
+  for (const locale of ARTICLE_SUPPORTED_LOCALES) {
+    const t = article.translations?.find((tr) => tr.locale === locale);
+    locales[locale] = {
+      title: t?.title ?? '',
+      slug: t?.slug ?? '',
+      slugManuallyEdited: Boolean(t?.slug),
+      shortDescription: t?.short_description ?? '',
+      seoTitle: t?.seo_title ?? '',
+      seoDescription: t?.seo_description ?? '',
+    };
+  }
+
+  // Map content blocks
+  const blocks: ArticleBlockState[] = (article.content_blocks ?? [])
+    .slice()
+    .sort((a, b) => a.order - b.order)
+    .map((b) => ({
+      _id: nextId(),
+      blockId: b.id,
+      type: b.type,
+      label: b.label ?? b.type,
+      order: b.order,
+      visible: b.visible,
+      required: b.required,
+      locales: (b.translations ?? {}) as ArticleBlockState['locales'],
+    }));
+
+  return {
+    status: article.status ?? 'draft',
+    tags: article.tags ?? [],
+    country: article.country ?? '',
+    author: article.author ?? '',
+    cover_image_url: article.cover_image_url,
+    category_id: article.category_id ?? '',
+    locales,
+    blocks,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
 
 export default function EditArticlePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
   const queryClient = useQueryClient();
+  const currentUser = useAuthStore((s) => s.currentUser);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
-  const { data: article, isLoading, isError, refetch } = useQuery({
+  // Role guard
+  useEffect(() => {
+    if (currentUser && currentUser.role === 'reviewer') {
+      router.replace('/dashboard');
+    }
+  }, [currentUser, router]);
+
+  // Fetch article
+  const { data: article, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['article', id],
     queryFn: () => articlesApi.getArticle(id),
   });
 
+  // Handle 404
+  useEffect(() => {
+    if (isError && error instanceof ApiError && (error as ApiError).status === 404) {
+      toast.error('Article not found');
+      router.replace('/articles');
+    }
+  }, [isError, error, router]);
+
+  // ── Update mutation ──────────────────────────────────────────────────────
+
   const updateMutation = useMutation({
-    mutationFn: (values: ArticleFormValues) =>
-      articlesApi.updateArticle(id, {
-        title: values.title,
-        slug: values.slug,
-        content: values.content || undefined,
+    mutationFn: async (values: ArticleEditorFormValues) => {
+      // 1. Update flat fields
+      await articlesApi.updateArticle(id, {
         tags: values.tags.length ? values.tags : undefined,
         country: values.country || undefined,
         author: values.author || undefined,
         cover_image_url: values.cover_image_url,
-      }),
+        category_id: values.category_id || undefined,
+      });
+
+      // 2. Update status if changed
+      if (article && values.status !== article.status) {
+        await articlesApi.updateArticleStatus(id, values.status as ArticleStatus);
+      }
+
+      // 3. Upsert translations per locale
+      await Promise.all(
+        ARTICLE_SUPPORTED_LOCALES
+          .filter((locale) => values.locales[locale].title.trim())
+          .map((locale) => {
+            const ls = values.locales[locale];
+            // Collect per-block content for this locale
+            const blockPayload: Record<string, { heading?: string; content?: unknown }> = {};
+            for (const block of values.blocks) {
+              const blockLocale = block.locales[locale];
+              if (blockLocale) {
+                blockPayload[block.blockId] = {
+                  heading: blockLocale.heading || undefined,
+                  content: blockLocale.content ?? undefined,
+                };
+              }
+            }
+
+            return articlesApi.updateTranslation(id, locale, {
+              title: ls.title.trim(),
+              slug: ls.slug.trim() || undefined,
+              short_description: ls.shortDescription.trim() || undefined,
+              seo_title: ls.seoTitle.trim() || undefined,
+              seo_description: ls.seoDescription.trim() || undefined,
+              blocks: Object.keys(blockPayload).length > 0 ? blockPayload : undefined,
+            });
+          }),
+      );
+    },
     onSuccess: () => {
       toast.success('Article saved');
       queryClient.invalidateQueries({ queryKey: ['article', id] });
+      queryClient.invalidateQueries({ queryKey: ['articles'] });
+    },
+    onError: () => toast.error('Failed to save article'),
+  });
+
+  // ── Delete mutation ──────────────────────────────────────────────────────
+
+  const deleteMutation = useMutation({
+    mutationFn: () => articlesApi.deleteArticle(id),
+    onSuccess: () => {
+      toast.success('Article deleted');
+      queryClient.invalidateQueries({ queryKey: ['articles'] });
+      router.push('/articles');
     },
     onError: () => {
-      toast.error('Failed to save article');
+      setDeleteDialogOpen(false);
+      toast.error('Failed to delete article');
     },
   });
 
+  // ── Loading state ────────────────────────────────────────────────────────
+
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center gap-4">
-          <Skeleton className="h-8 w-32" />
-        </div>
-        <Skeleton className="h-8 w-64" />
-        <div className="mx-auto max-w-2xl space-y-4">
-          <Skeleton className="h-10 w-full" />
-          <Skeleton className="h-10 w-full" />
-          <Skeleton className="h-32 w-full" />
-          <Skeleton className="h-10 w-full" />
-          <Skeleton className="h-10 w-full" />
+      <div className="p-6 space-y-6">
+        <Skeleton className="h-8 w-72" />
+        <div className="flex gap-5">
+          <div className="flex-1 space-y-4">
+            <div className="flex gap-2 border-b pb-2">
+              {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-7 w-20" />)}
+            </div>
+            <div className="rounded-lg border border-slate-200 p-5 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+              <Skeleton className="h-20 w-full" />
+            </div>
+            <Skeleton className="h-48 w-full rounded-lg" />
+          </div>
+          <div className="w-[360px] space-y-3">
+            <div className="rounded-lg border border-slate-200 p-4 space-y-4">
+              <div className="flex gap-3 border-b pb-2">
+                {[1, 2, 3].map((i) => <Skeleton key={i} className="h-6 w-16" />)}
+              </div>
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-8 w-full" />
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -75,36 +221,36 @@ export default function EditArticlePage({ params }: { params: Promise<{ id: stri
     );
   }
 
+  // ── Render ───────────────────────────────────────────────────────────────
+
+  const articleTitle =
+    article.translations?.find((t) => t.locale === 'en')?.title ??
+    article.title ??
+    'Edit article';
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="sm" asChild className="gap-1.5 text-slate-600">
-          <Link href="/articles">
-            <ArrowLeft size={16} aria-hidden="true" />
-            Back to Articles
-          </Link>
-        </Button>
-      </div>
-
-      <h1 className="text-2xl font-semibold text-slate-800">{article.title}</h1>
-
-      <div className="mx-auto max-w-2xl">
-        <ArticleForm
-          initialValues={{
-            title: article.title,
-            slug: article.slug,
-            content: article.content ?? '',
-            tags: article.tags ?? [],
-            country: article.country ?? '',
-            author: article.author ?? '',
-            cover_image_url: article.cover_image_url,
-          }}
-          submitLabel="Save Article"
+    <>
+      <div className="p-6">
+        <ArticleEditorForm
+          defaultValues={mapArticleToFormValues(article)}
           isSubmitting={updateMutation.isPending}
           onSubmit={(values) => updateMutation.mutate(values)}
+          onSaveDraft={(values) => updateMutation.mutate(values)}
           onCancel={() => router.push('/articles')}
+          onDelete={() => setDeleteDialogOpen(true)}
+          title={articleTitle}
         />
       </div>
-    </div>
+
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title="Delete Article"
+        description="Are you sure you want to delete this article? This action cannot be undone."
+        confirmLabel="Delete"
+        onConfirm={() => deleteMutation.mutate()}
+        loading={deleteMutation.isPending}
+      />
+    </>
   );
 }

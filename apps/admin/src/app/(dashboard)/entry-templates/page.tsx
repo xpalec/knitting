@@ -6,11 +6,13 @@ import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Search,
+  Plus,
   MoreHorizontal,
   Pencil,
   Trash2,
   FileX,
   Layers,
+  ChevronDown,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -22,10 +24,12 @@ import {
 import type { EntryTemplate } from '@/lib/api/entry-templates';
 import { useAuthStore } from '@/store/auth';
 
-import { TranslationStatusBadge } from '@/components/content-blocks/translation-status-badge';
+import { LanguageBadges } from '@/components/ui/language-badges';
+import type { LocaleTranslationStatus } from '@/components/ui/language-badges';
 import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -47,16 +51,47 @@ import {
 } from '@/components/ui/table';
 import { Pagination, TableFooterBar } from '@/components/ui/pagination';
 
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
 const PAGE_SIZE = 20;
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function getTemplateStatuses(
+  template: EntryTemplate,
+): Partial<Record<string, LocaleTranslationStatus>> {
+  return Object.fromEntries(
+    SUPPORTED_LOCALES.map((locale) => [
+      locale,
+      deriveTemplateTranslationStatus(template, locale),
+    ]),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Skeleton rows
+// ---------------------------------------------------------------------------
 
 function SkeletonRows() {
   return (
     <>
       {Array.from({ length: 5 }).map((_, i) => (
         <TableRow key={i}>
+          <TableCell><Skeleton className="h-4 w-4" /></TableCell>
           <TableCell><Skeleton className="h-4 w-48" /></TableCell>
-          <TableCell><Skeleton className="h-4 w-16" /></TableCell>
-          <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+          <TableCell><div className="flex gap-1"><Skeleton className="h-6 w-6 rounded-lg" /><Skeleton className="h-6 w-6 rounded-lg" /></div></TableCell>
           <TableCell><Skeleton className="h-4 w-8" /></TableCell>
           <TableCell><Skeleton className="h-4 w-28" /></TableCell>
           <TableCell><Skeleton className="h-8 w-8 rounded" /></TableCell>
@@ -65,6 +100,10 @@ function SkeletonRows() {
     </>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
 
 export default function EntryTemplatesPage() {
   const router = useRouter();
@@ -78,7 +117,10 @@ export default function EntryTemplatesPage() {
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE);
   const [deleteTarget, setDeleteTarget] = useState<EntryTemplate | null>(null);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const timer = setTimeout(() => { setSearch(searchInput); setPage(1); }, 300);
@@ -103,14 +145,51 @@ export default function EntryTemplatesPage() {
     },
   });
 
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      const results = await Promise.allSettled(ids.map((id) => entryTemplatesApi.delete(id)));
+      const failed = results.filter((r) => r.status === 'rejected').length;
+      if (failed > 0) throw new Error(`${failed} template(s) could not be deleted`);
+    },
+    onSuccess: () => {
+      toast.success(`${selectedIds.size} template(s) deleted`);
+      setSelectedIds(new Set());
+      setBulkDeleteOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['entry-templates'] });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message ?? 'Failed to delete some templates');
+      setBulkDeleteOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['entry-templates'] });
+    },
+  });
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === pageItems.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(pageItems.map((t) => t.id)));
+    }
+  }
+
   const totalCount = templates?.length ?? 0;
 
   const filtered = (templates ?? []).filter(
     (t) => !search || t.name.toLowerCase().includes(search.toLowerCase()),
   );
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const pageItems = filtered.slice((page - 1) * pageSize, page * pageSize);
+
+  const colSpan = 6;
 
   return (
     <div className="space-y-6">
@@ -119,7 +198,10 @@ export default function EntryTemplatesPage() {
         description="Manage reusable content block templates for encyclopedia entries"
       >
         <Button asChild className="gap-2 bg-violet-600 hover:bg-violet-700 text-white">
-          <Link href="/entry-templates/new">+ Add Template</Link>
+          <Link href="/entry-templates/new">
+            <Plus size={16} aria-hidden="true" />
+            Add template
+          </Link>
         </Button>
       </PageHeader>
 
@@ -167,10 +249,16 @@ export default function EntryTemplatesPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10">
+                    <Checkbox
+                      checked={pageItems.length > 0 && selectedIds.size === pageItems.length}
+                      indeterminate={selectedIds.size > 0 && selectedIds.size < pageItems.length}
+                      onChange={toggleSelectAll}
+                      aria-label="Select all"
+                    />
+                  </TableHead>
                   <TableHead>Name</TableHead>
-                  {SUPPORTED_LOCALES.map((locale) => (
-                    <TableHead key={locale}>{locale.toUpperCase()}</TableHead>
-                  ))}
+                  <TableHead>Languages</TableHead>
                   <TableHead>Blocks</TableHead>
                   <TableHead>Updated</TableHead>
                   <TableHead className="w-12">Actions</TableHead>
@@ -181,13 +269,13 @@ export default function EntryTemplatesPage() {
                   <SkeletonRows />
                 ) : pageItems.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6}>
+                    <TableCell colSpan={colSpan}>
                       <div className="flex flex-col items-center justify-center py-16 text-slate-400">
                         <FileX size={36} className="mb-3" aria-hidden="true" />
                         <p className="text-sm font-medium">No templates found</p>
-                        <Button asChild variant="outline" className="mt-4 gap-1">
-                          <Link href="/entry-templates/new">+ Add Template</Link>
-                        </Button>
+                        <p className="text-xs mt-1">
+                          {search ? 'Try adjusting your search' : 'Create your first template to get started'}
+                        </p>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -197,21 +285,37 @@ export default function EntryTemplatesPage() {
                       key={template.id}
                       className="cursor-pointer"
                       onClick={() => router.push(`/entry-templates/${template.id}`)}
+                      data-selected={selectedIds.has(template.id) || undefined}
                     >
-                      <TableCell className="font-medium text-slate-700">{template.name}</TableCell>
-                      {SUPPORTED_LOCALES.map((locale) => (
-                        <TableCell key={locale}>
-                          <TranslationStatusBadge
-                            status={deriveTemplateTranslationStatus(template, locale)}
-                          />
-                        </TableCell>
-                      ))}
-                      <TableCell className="text-slate-600 text-sm">{template.blocks.length}</TableCell>
-                      <TableCell className="text-slate-600 text-sm whitespace-nowrap">
-                        {new Date(template.updated_at).toLocaleDateString('en-US', {
-                          month: 'short', day: 'numeric', year: 'numeric',
-                        })}
+                      {/* Checkbox */}
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={selectedIds.has(template.id)}
+                          onChange={() => toggleSelect(template.id)}
+                          aria-label={`Select ${template.name}`}
+                        />
                       </TableCell>
+
+                      {/* Name */}
+                      <TableCell className="font-medium text-slate-700">{template.name}</TableCell>
+
+                      {/* Languages with translation status */}
+                      <TableCell>
+                        <LanguageBadges
+                          locales={[...SUPPORTED_LOCALES]}
+                          statuses={getTemplateStatuses(template)}
+                        />
+                      </TableCell>
+
+                      {/* Blocks */}
+                      <TableCell className="text-slate-600 text-sm">{template.blocks.length}</TableCell>
+
+                      {/* Updated */}
+                      <TableCell className="text-slate-600 text-sm whitespace-nowrap">
+                        {formatDate(template.updated_at)}
+                      </TableCell>
+
+                      {/* Actions */}
                       <TableCell onClick={(e) => e.stopPropagation()} className="text-right">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -238,12 +342,34 @@ export default function EntryTemplatesPage() {
                 )}
               </TableBody>
               {!isLoading && pageItems.length > 0 && (
-                <TableFooter>
-                  <TableRow>
-                    <TableCell colSpan={6} className="p-0">
-                      <TableFooterBar pageSize={PAGE_SIZE} />
-                    </TableCell>
-                  </TableRow>
+                <TableFooter className="bg-white border-t border-slate-200">
+                  <tr>
+                    <td colSpan={colSpan} className="p-0">
+                      <TableFooterBar
+                        selectedCount={selectedIds.size}
+                        pageSize={pageSize}
+                        onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
+                        bulkActions={
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="outline" size="sm" className="h-8 gap-2 px-3 text-sm text-slate-500 border-slate-200">
+                                Actions <ChevronDown size={14} aria-hidden="true" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start">
+                              <DropdownMenuItem
+                                className="text-red-600 focus:text-red-600"
+                                onClick={() => setBulkDeleteOpen(true)}
+                              >
+                                <Trash2 size={14} aria-hidden="true" />
+                                Delete {selectedIds.size} template{selectedIds.size !== 1 ? 's' : ''}
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        }
+                      />
+                    </td>
+                  </tr>
                 </TableFooter>
               )}
             </Table>
@@ -256,7 +382,7 @@ export default function EntryTemplatesPage() {
           page={page}
           totalPages={totalPages}
           total={filtered.length}
-          pageSize={PAGE_SIZE}
+          pageSize={pageSize}
           onPageChange={setPage}
         />
       )}
@@ -274,6 +400,16 @@ export default function EntryTemplatesPage() {
         loadingLabel="Deleting…"
         loading={deleteMutation.isPending}
         onConfirm={() => { if (deleteTarget) deleteMutation.mutate(deleteTarget.id); }}
+      />
+
+      <ConfirmDialog
+        open={bulkDeleteOpen}
+        onOpenChange={(open) => !open && setBulkDeleteOpen(false)}
+        title={`Delete ${selectedIds.size} template${selectedIds.size !== 1 ? 's' : ''}`}
+        description={`Are you sure you want to delete ${selectedIds.size} template${selectedIds.size !== 1 ? 's' : ''}? This action cannot be undone.`}
+        confirmLabel={`Delete ${selectedIds.size} template${selectedIds.size !== 1 ? 's' : ''}`}
+        onConfirm={() => bulkDeleteMutation.mutate(Array.from(selectedIds))}
+        loading={bulkDeleteMutation.isPending}
       />
     </div>
   );

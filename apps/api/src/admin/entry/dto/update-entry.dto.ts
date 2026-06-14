@@ -21,4 +21,9 @@ export class UpdateEntryDto {
   @IsOptional()
   @IsObject()
   metadata?: Record<string, unknown>;
+
+  @ApiPropertyOptional({ example: 'uuid-of-category' })
+  @IsOptional()
+  @IsUUID()
+  category_id?: string;
 }

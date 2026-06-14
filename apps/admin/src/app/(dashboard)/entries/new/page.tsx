@@ -51,6 +51,7 @@ export default function NewEntryPage() {
         origin_language: 'en',
         term: values.locales.en.title.trim(),
         definition_short: values.locales.en.shortDescription.trim() || undefined,
+        category_id: values.categoryId || undefined,
       });
     },
     onSuccess: (entry) => {

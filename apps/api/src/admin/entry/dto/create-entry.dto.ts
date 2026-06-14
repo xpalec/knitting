@@ -18,4 +18,9 @@ export class CreateEntryDto {
   @IsOptional()
   @IsString()
   definition_short?: string;
+
+  @ApiPropertyOptional({ example: 'uuid-of-category' })
+  @IsOptional()
+  @IsUUID()
+  category_id?: string;
 }

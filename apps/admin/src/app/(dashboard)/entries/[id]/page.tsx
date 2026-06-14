@@ -137,10 +137,14 @@ export default function EntryEditPage({ params }: { params: Promise<{ id: string
 
   const updateMutation = useMutation({
     mutationFn: async (values: EntryFormValues) => {
-      // 1. Update entry_template_id if changed
-      if (values.entryTemplateId !== (entry?.entry_template_id ?? '')) {
+      // 1. Update entry_template_id and/or category_id if changed
+      const entryTemplateChanged = values.entryTemplateId !== (entry?.entry_template_id ?? '');
+      const categoryChanged = values.categoryId !== (entry?.category_id ?? '');
+
+      if (entryTemplateChanged || categoryChanged) {
         await entriesApi.updateEntry(id, {
-          entry_template_id: values.entryTemplateId || undefined,
+          ...(entryTemplateChanged && { entry_template_id: values.entryTemplateId || undefined }),
+          ...(categoryChanged && { category_id: values.categoryId || '' }),
         });
       }
 

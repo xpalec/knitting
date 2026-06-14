@@ -75,11 +75,13 @@ export interface CreateEntryPayload {
   origin_language: string;
   term: string;
   definition_short?: string;
+  category_id?: string;
 }
 
 export interface UpdateEntryPayload {
   entry_template_id?: string;
   origin_language?: string;
+  category_id?: string;
   metadata?: {
     skill_level?: SkillLevel;
     definition_short?: string;
