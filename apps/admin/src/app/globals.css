@@ -97,6 +97,10 @@
   }
 }
 
+button {
+  cursor: pointer;
+}
+
 
 /* TipTap */
 .content-image {

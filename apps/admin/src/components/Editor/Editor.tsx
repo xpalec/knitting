@@ -70,6 +70,7 @@ import {
 import 'reactjs-tiptap-editor/style.css';
 
 import { EditorContent, useEditor } from '@tiptap/react';
+import './editor.css';
 
 // ---------------------------------------------------------------------------
 // Types

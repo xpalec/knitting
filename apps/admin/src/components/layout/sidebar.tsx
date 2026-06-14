@@ -71,7 +71,7 @@ const NAV_SECTIONS: Array<{ label: string; items: NavItem[] }> = [
     label: 'SYSTEM',
     items: [
       { label: 'Users', href: '/users', icon: Users, adminOnly: true },
-      { label: 'Settings', href: '/settings', icon: Settings, adminOnly: true },
+      { label: 'Settings', href: '/settings/languages', icon: Settings, adminOnly: true },
     ],
   },
 ];

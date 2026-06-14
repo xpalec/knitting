@@ -46,11 +46,16 @@ export default function NewEntryPage() {
       if (!values.entryTemplateId) {
         throw new Error('Please select an entry template before saving.');
       }
+      // Find the first locale that has a title (default/en should be first)
+      const defaultLocale = Object.keys(values.locales).find(
+        (l) => values.locales[l]?.title?.trim()
+      ) ?? 'en';
+      const defaultLocaleState = values.locales[defaultLocale];
       return entriesApi.createEntry({
         entry_template_id: values.entryTemplateId,
         origin_language: 'en',
-        term: values.locales.en.title.trim(),
-        definition_short: values.locales.en.shortDescription.trim() || undefined,
+        term: defaultLocaleState?.title?.trim() ?? '',
+        definition_short: defaultLocaleState?.shortDescription?.trim() || undefined,
         category_id: values.categoryId || undefined,
       });
     },

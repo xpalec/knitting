@@ -7,7 +7,6 @@ import { toast } from 'sonner';
 
 import {
   articlesApi,
-  ARTICLE_SUPPORTED_LOCALES,
 } from '@/lib/api/articles';
 import type { Article, ArticleLocale, ArticleStatus } from '@/lib/api/articles';
 import { ApiError } from '@/lib/api/client';
@@ -32,17 +31,17 @@ let _idSeq = 5000;
 function nextId() { return `ae-${_idSeq++}`; }
 
 function mapArticleToFormValues(article: Article): ArticleEditorFormValues {
-  const locales = {} as Record<ArticleLocale, ArticleLocaleTabState>;
+  const locales: Record<string, ArticleLocaleTabState> = {};
 
-  for (const locale of ARTICLE_SUPPORTED_LOCALES) {
-    const t = article.translations?.find((tr) => tr.locale === locale);
-    locales[locale] = {
-      title: t?.title ?? '',
-      slug: t?.slug ?? '',
-      slugManuallyEdited: Boolean(t?.slug),
-      shortDescription: t?.short_description ?? '',
-      seoTitle: t?.seo_title ?? '',
-      seoDescription: t?.seo_description ?? '',
+  // Build locale data from all existing translations
+  for (const t of (article.translations ?? [])) {
+    locales[t.locale] = {
+      title: t.title ?? '',
+      slug: t.slug ?? '',
+      slugManuallyEdited: Boolean(t.slug),
+      shortDescription: t.short_description ?? '',
+      seoTitle: t.seo_title ?? '',
+      seoDescription: t.seo_description ?? '',
     };
   }
 
@@ -53,11 +52,10 @@ function mapArticleToFormValues(article: Article): ArticleEditorFormValues {
     .map((b) => {
       // Collect per-locale block content from each translation's blocks field
       const localeData: ArticleBlockState['locales'] = {};
-      for (const locale of ARTICLE_SUPPORTED_LOCALES) {
-        const t = article.translations?.find((tr) => tr.locale === locale);
+      for (const t of (article.translations ?? [])) {
         const blockData = t?.blocks?.[b.id];
         if (blockData) {
-          localeData[locale] = {
+          localeData[t.locale as ArticleLocale] = {
             heading: blockData.heading ?? '',
             content: blockData.content ?? null,
           };
@@ -148,13 +146,13 @@ export default function EditArticlePage({ params }: { params: Promise<{ id: stri
 
       // 3. Upsert translations for locales that have a title
       await Promise.all(
-        ARTICLE_SUPPORTED_LOCALES
-          .filter((locale) => values.locales[locale].title.trim())
+        Object.keys(values.locales)
+          .filter((locale) => values.locales[locale]?.title?.trim())
           .map((locale) => {
-            const ls = values.locales[locale];
+            const ls = values.locales[locale]!;
             const blockPayload: Record<string, { heading?: string; content?: unknown }> = {};
             for (const block of values.blocks) {
-              const blockLocale = block.locales[locale];
+              const blockLocale = block.locales[locale as ArticleLocale];
               if (blockLocale) {
                 blockPayload[block.blockId] = {
                   heading: blockLocale.heading || undefined,

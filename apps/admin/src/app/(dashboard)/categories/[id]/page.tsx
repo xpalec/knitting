@@ -10,8 +10,8 @@ import { toast } from 'sonner';
 import { adminCategoriesApi } from '@/lib/api/categories';
 import type { AdminCategory } from '@/lib/api/categories';
 import { ApiError } from '@/lib/api/client';
-import { CategoryForm, SUPPORTED_LOCALES } from '@/components/categories/category-form';
-import type { CategoryFormValues, SupportedLocale, LocaleTabState } from '@/components/categories/category-form';
+import { CategoryForm } from '@/components/categories/category-form';
+import type { CategoryFormValues, LocaleTabState } from '@/components/categories/category-form';
 import { APP_COLORS } from '@/lib/colors';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Button } from '@/components/ui/button';
@@ -22,19 +22,18 @@ import { Skeleton } from '@/components/ui/skeleton';
 // ---------------------------------------------------------------------------
 
 function mapCategoryToFormValues(category: AdminCategory): CategoryFormValues {
-  const locales = {} as Record<SupportedLocale, LocaleTabState>;
+  const locales: Record<string, LocaleTabState> = {};
 
-  for (const locale of SUPPORTED_LOCALES) {
-    const t = category.translations.find((tr) => tr.locale === locale);
-    locales[locale] = {
-      name: t?.name ?? '',
-      slug: t?.slug ?? '',
-      slugManuallyEdited: Boolean(t?.slug),
-      short_description: t?.short_description ?? '',
-      description: t?.description ?? null,
-      seo_title: t?.seo_title ?? '',
-      seo_description: t?.seo_description ?? '',
-      status: t?.status ?? 'draft',
+  for (const t of category.translations) {
+    locales[t.locale] = {
+      name: t.name ?? '',
+      slug: t.slug ?? '',
+      slugManuallyEdited: Boolean(t.slug),
+      short_description: t.short_description ?? '',
+      description: t.description ?? null,
+      seo_title: t.seo_title ?? '',
+      seo_description: t.seo_description ?? '',
+      status: t.status ?? 'draft',
     };
   }
 
@@ -60,7 +59,7 @@ export default function EditCategoryPage({
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  const [slugErrors, setSlugErrors] = useState<Partial<Record<SupportedLocale, string>>>({});
+  const [slugErrors, setSlugErrors] = useState<Partial<Record<string, string>>>({});
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   // ── Fetch category ────────────────────────────────────────────────────────
@@ -99,10 +98,10 @@ export default function EditCategoryPage({
         status: values.status,
       });
 
-      const translationPromises = SUPPORTED_LOCALES
-        .filter((locale) => values.locales[locale].name.trim())
+      const translationPromises = Object.keys(values.locales)
+        .filter((locale) => values.locales[locale]?.name?.trim())
         .map((locale) => {
-          const tab = values.locales[locale];
+          const tab = values.locales[locale]!;
           return adminCategoriesApi.upsertTranslation(id, locale, {
             name: tab.name.trim(),
             slug: tab.slug.trim(),

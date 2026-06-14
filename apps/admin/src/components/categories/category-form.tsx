@@ -25,21 +25,15 @@ import { Save, Trash2, X, Upload } from 'lucide-react';
 import type { CategoryType, CategoryStatus, TranslationStatus, AdminCategory } from '@/lib/api/categories';
 import { APP_COLORS, APP_COLOR_LIST, colorSlotFromBg } from '@/lib/colors';
 import { hasAtLeastOneCompleteLocale } from '@/lib/validation';
+import { useLanguages } from '@/hooks/useLanguages';
 
 // ---------------------------------------------------------------------------
-// Constants
+// Constants (kept for backward compatibility — dynamic list comes from store)
 // ---------------------------------------------------------------------------
 
+/** @deprecated Use useLanguages() hook instead. Kept for TypeScript type compatibility. */
 export const SUPPORTED_LOCALES = ['en', 'pl', 'fr', 'de', 'no'] as const;
-export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
-
-const LOCALE_LABELS: Record<SupportedLocale, string> = {
-  en: 'English',
-  pl: 'Polish',
-  fr: 'French',
-  de: 'German',
-  no: 'Norwegian',
-};
+export type SupportedLocale = string;
 
 const TYPE_OPTIONS: { value: CategoryType; label: string }[] = [
   { value: 'entry', label: 'Entry' },
@@ -103,7 +97,7 @@ export interface CategoryFormValues {
   color: string;
   status: CategoryStatus;
   // Per-locale
-  locales: Record<SupportedLocale, LocaleTabState>;
+  locales: Record<string, LocaleTabState>;
 }
 
 interface CategoryFormProps {
@@ -112,7 +106,7 @@ interface CategoryFormProps {
   isLoadingParents?: boolean;
   onSubmit: (values: CategoryFormValues) => void | Promise<void>;
   isSubmitting?: boolean;
-  slugErrors?: Partial<Record<SupportedLocale, string>>;
+  slugErrors?: Partial<Record<string, string>>;
   onCancel?: () => void;
   onDelete?: () => void;
   /** Header title — the category name displayed below the action buttons */
@@ -137,11 +131,12 @@ function defaultLocaleTab(): LocaleTabState {
 }
 
 function buildDefaultLocales(
+  activeLocales: string[],
   partial?: Partial<CategoryFormValues>,
-): Record<SupportedLocale, LocaleTabState> {
-  const defaults: Partial<Record<SupportedLocale, LocaleTabState>> = partial?.locales ?? {};
-  const result = {} as Record<SupportedLocale, LocaleTabState>;
-  for (const locale of SUPPORTED_LOCALES) {
+): Record<string, LocaleTabState> {
+  const defaults: Partial<Record<string, LocaleTabState>> = partial?.locales ?? {};
+  const result: Record<string, LocaleTabState> = {};
+  for (const locale of activeLocales) {
     const existing = defaults[locale];
     result[locale] = {
       ...defaultLocaleTab(),
@@ -226,9 +221,9 @@ function ColorPicker({ value, onChange, disabled }: ColorPickerProps) {
 // ---------------------------------------------------------------------------
 
 interface LocaleTabProps {
-  locale: SupportedLocale;
+  locale: string;
   state: LocaleTabState;
-  onChange: (locale: SupportedLocale, patch: Partial<LocaleTabState>) => void;
+  onChange: (locale: string, patch: Partial<LocaleTabState>) => void;
   isSubmitting: boolean;
   slugError?: string;
 }
@@ -338,27 +333,40 @@ export function CategoryForm({
   onDelete,
   title,
 }: CategoryFormProps) {
+  const { allLocales, localeLabels, defaultLanguage } = useLanguages();
+
+  const activeLocales = allLocales.length > 0 ? allLocales : ['en'];
+  const defaultLocale = defaultLanguage?.locale ?? activeLocales[0] ?? 'en';
+
   const [type, setType] = useState<CategoryType | ''>(defaultValues?.type ?? '');
   const [parentId, setParentId] = useState<string | null>(defaultValues?.parent_id ?? null);
   const [color, setColor] = useState<string>(
     defaultValues?.color ?? APP_COLORS.violet.bg,
   );
   const [status, setStatus] = useState<CategoryStatus>(defaultValues?.status ?? 'draft');
-  const [locales, setLocales] = useState<Record<SupportedLocale, LocaleTabState>>(
-    () => buildDefaultLocales(defaultValues),
+  const [locales, setLocales] = useState<Record<string, LocaleTabState>>(
+    () => buildDefaultLocales(activeLocales, defaultValues),
   );
 
-  const localeValid = hasAtLeastOneCompleteLocale(locales);
+  // Ensure any newly added languages get a default state entry (non-destructive)
+  const enrichedLocales = { ...locales };
+  for (const locale of activeLocales) {
+    if (!enrichedLocales[locale]) {
+      enrichedLocales[locale] = defaultLocaleTab();
+    }
+  }
+
+  const localeValid = hasAtLeastOneCompleteLocale(enrichedLocales);
   const isSubmitDisabled = isSubmitting || !localeValid || !type;
 
   const localeErrors: string[] = localeValid
     ? []
     : ['At least one language must have both a name and slug filled.'];
 
-  function handleLocaleChange(locale: SupportedLocale, patch: Partial<LocaleTabState>) {
+  function handleLocaleChange(locale: string, patch: Partial<LocaleTabState>) {
     setLocales((prev) => ({
       ...prev,
-      [locale]: { ...prev[locale], ...patch },
+      [locale]: { ...(prev[locale] ?? defaultLocaleTab()), ...patch },
     }));
   }
 
@@ -368,7 +376,7 @@ export function CategoryForm({
       parent_id: parentId,
       color,
       status: overrideStatus ?? status,
-      locales,
+      locales: enrichedLocales,
     };
   }
 
@@ -384,7 +392,7 @@ export function CategoryForm({
     onSubmit(buildValues());
   }
 
-  const displayTitle = title ?? (locales.en.name.trim() || 'New category');
+  const displayTitle = title ?? (enrichedLocales[defaultLocale]?.name?.trim() || 'New category');
 
   return (
     <form onSubmit={handleSubmit} noValidate>
@@ -477,11 +485,11 @@ export function CategoryForm({
 
         {/* ── Left: language tabs ─────────────────────────────────────── */}
         <div className="flex-1 min-w-0">
-          <Tabs defaultValue="en">
+          <Tabs defaultValue={defaultLocale}>
             {/* Tab triggers — language name only, with translation dot indicator */}
             <TabsList variant="line" className="w-full justify-start">
-              {SUPPORTED_LOCALES.map((locale) => {
-                const translated = isLocaleTranslated(locales[locale]);
+              {activeLocales.map((locale) => {
+                const translated = isLocaleTranslated(enrichedLocales[locale] ?? defaultLocaleTab());
                 return (
                   <TabsTrigger key={locale} value={locale} variant="line" className="gap-1.5 items-center">
                     {/* Dot: green when translated, transparent placeholder when not */}
@@ -492,17 +500,17 @@ export function CategoryForm({
                       )}
                       aria-hidden="true"
                     />
-                    <span>{LOCALE_LABELS[locale]}</span>
+                    <span>{localeLabels[locale] ?? locale}</span>
                   </TabsTrigger>
                 );
               })}
             </TabsList>
 
-            {SUPPORTED_LOCALES.map((locale) => (
+            {activeLocales.map((locale) => (
               <TabsContent key={locale} value={locale}>
                 <LocaleTabContent
                   locale={locale}
-                  state={locales[locale]}
+                  state={enrichedLocales[locale] ?? defaultLocaleTab()}
                   onChange={handleLocaleChange}
                   isSubmitting={isSubmitting}
                   slugError={slugErrors[locale]}
@@ -605,8 +613,8 @@ export function CategoryForm({
               <Input
                 id="seo-title-en"
                 placeholder="SEO title"
-                value={locales.en.seo_title}
-                onChange={(e) => handleLocaleChange('en', {
+                value={enrichedLocales[defaultLocale]?.seo_title ?? ''}
+                onChange={(e) => handleLocaleChange(defaultLocale, {
                   seo_title: e.target.value.slice(0, SEO_TITLE_MAX),
                 })}
                 disabled={isSubmitting}
@@ -619,8 +627,8 @@ export function CategoryForm({
               <Textarea
                 id="seo-desc-en"
                 placeholder="SEO description"
-                value={locales.en.seo_description}
-                onChange={(e) => handleLocaleChange('en', {
+                value={enrichedLocales[defaultLocale]?.seo_description ?? ''}
+                onChange={(e) => handleLocaleChange(defaultLocale, {
                   seo_description: e.target.value.slice(0, SEO_DESC_MAX),
                 })}
                 disabled={isSubmitting}

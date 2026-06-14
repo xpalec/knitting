@@ -7,12 +7,12 @@ import { useEffect, useState } from 'react';
 
 import { adminCategoriesApi } from '@/lib/api/categories';
 import { ApiError } from '@/lib/api/client';
-import { CategoryForm, SUPPORTED_LOCALES } from '@/components/categories/category-form';
-import type { CategoryFormValues, SupportedLocale } from '@/components/categories/category-form';
+import { CategoryForm } from '@/components/categories/category-form';
+import type { CategoryFormValues } from '@/components/categories/category-form';
 
 export default function NewCategoryPage() {
   const router = useRouter();
-  const [slugErrors, setSlugErrors] = useState<Partial<Record<SupportedLocale, string>>>({});
+  const [slugErrors, setSlugErrors] = useState<Partial<Record<string, string>>>({});
 
   // Fetch parent categories for the dropdown
   const { data: parentData, isLoading: isLoadingParents, isError: isParentsError } = useQuery({
@@ -37,10 +37,10 @@ export default function NewCategoryPage() {
       });
 
       // Step 2: upsert translations for all locales that have a name
-      const translationPromises = SUPPORTED_LOCALES
-        .filter((locale) => values.locales[locale].name.trim())
+      const translationPromises = Object.keys(values.locales)
+        .filter((locale) => values.locales[locale]?.name?.trim())
         .map((locale) => {
-          const tab = values.locales[locale];
+          const tab = values.locales[locale]!;
           return adminCategoriesApi.upsertTranslation(category.id, locale, {
             name: tab.name.trim(),
             slug: tab.slug.trim(),

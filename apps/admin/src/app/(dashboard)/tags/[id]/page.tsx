@@ -10,24 +10,23 @@ import { toast } from 'sonner';
 import { adminTagsApi } from '@/lib/api/tags';
 import type { AdminTag } from '@/lib/api/tags';
 import { ApiError } from '@/lib/api/client';
-import { TagForm, SUPPORTED_LOCALES } from '@/components/tags/tag-form';
-import type { TagFormValues, LocaleTabState, SupportedLocale } from '@/components/tags/tag-form';
+import { TagForm } from '@/components/tags/tag-form';
+import type { TagFormValues, LocaleTabState } from '@/components/tags/tag-form';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 
 function mapTagToFormValues(tag: AdminTag): TagFormValues {
-  const locales = {} as Record<SupportedLocale, LocaleTabState>;
-  for (const locale of SUPPORTED_LOCALES) {
-    const t = tag.translations.find((tr) => tr.locale === locale);
-    locales[locale] = {
-      name: t?.name ?? '',
-      slug: t?.slug ?? '',
-      slugManuallyEdited: Boolean(t?.slug),
-      description: t?.description ?? null,
-      seo_title: t?.seo_title ?? '',
-      seo_description: t?.seo_description ?? '',
-      status: t?.status ?? 'draft',
+  const locales: Record<string, LocaleTabState> = {};
+  for (const t of tag.translations) {
+    locales[t.locale] = {
+      name: t.name ?? '',
+      slug: t.slug ?? '',
+      slugManuallyEdited: Boolean(t.slug),
+      description: t.description ?? null,
+      seo_title: t.seo_title ?? '',
+      seo_description: t.seo_description ?? '',
+      status: t.status ?? 'draft',
     };
   }
   return { locales };
@@ -42,7 +41,7 @@ export default function EditTagPage({
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  const [slugErrors, setSlugErrors] = useState<Partial<Record<SupportedLocale, string>>>({});
+  const [slugErrors, setSlugErrors] = useState<Partial<Record<string, string>>>({});
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const { data: tag, isLoading, error } = useQuery({
@@ -52,12 +51,12 @@ export default function EditTagPage({
 
   const updateMutation = useMutation({
     mutationFn: async (values: TagFormValues) => {
-      const localesWithNames = SUPPORTED_LOCALES.filter(
-        (locale) => values.locales[locale].name.trim(),
+      const localesWithNames = Object.keys(values.locales).filter(
+        (locale) => values.locales[locale]?.name?.trim(),
       );
       await Promise.all(
         localesWithNames.map((locale) => {
-          const tab = values.locales[locale];
+          const tab = values.locales[locale]!;
           return adminTagsApi.upsertTranslation(id, locale, {
             name: tab.name.trim(),
             slug: tab.slug.trim(),

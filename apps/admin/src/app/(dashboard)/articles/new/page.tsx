@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
-import { articlesApi, ARTICLE_SUPPORTED_LOCALES } from '@/lib/api/articles';
+import { articlesApi } from '@/lib/api/articles';
 import { ApiError } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
 import { ArticleEditorForm } from '@/components/articles/article-editor-form';
@@ -51,15 +51,15 @@ export default function NewArticlePage() {
       }
 
       // 3. Upsert translations for each locale that has a title
-      const localesWithTitle = ARTICLE_SUPPORTED_LOCALES.filter(
-        (locale) => values.locales[locale].title.trim(),
+      const localesWithTitle = Object.keys(values.locales).filter(
+        (locale) => values.locales[locale]?.title?.trim(),
       );
       await Promise.all(
         localesWithTitle.map((locale) => {
-          const ls = values.locales[locale];
+          const ls = values.locales[locale]!;
           const blockPayload: Record<string, { heading?: string; content?: unknown }> = {};
           for (const block of values.blocks) {
-            const blockLocale = block.locales[locale];
+            const blockLocale = block.locales[locale as import('@/lib/api/articles').ArticleLocale];
             if (blockLocale) {
               blockPayload[block.blockId] = {
                 heading: blockLocale.heading || undefined,

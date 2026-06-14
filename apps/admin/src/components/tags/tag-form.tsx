@@ -17,21 +17,15 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { Save, Trash2, X } from 'lucide-react';
 import type { TagTranslationStatus } from '@/lib/api/tags';
+import { useLanguages } from '@/hooks/useLanguages';
 
 // ---------------------------------------------------------------------------
-// Constants
+// Constants (kept for backward compatibility — dynamic list comes from store)
 // ---------------------------------------------------------------------------
 
+/** @deprecated Use useLanguages() hook instead. Kept for TypeScript type compatibility. */
 export const SUPPORTED_LOCALES = ['en', 'pl', 'fr', 'de', 'no'] as const;
-export type SupportedLocale = typeof SUPPORTED_LOCALES[number];
-
-const LOCALE_LABELS: Record<SupportedLocale, string> = {
-  en: 'English',
-  pl: 'Polish',
-  fr: 'French',
-  de: 'German',
-  no: 'Norwegian',
-};
+export type SupportedLocale = string;
 
 const STATUS_OPTIONS: { value: TagTranslationStatus; label: string }[] = [
   { value: 'draft',     label: 'Draft' },
@@ -70,14 +64,14 @@ export interface LocaleTabState {
 }
 
 export interface TagFormValues {
-  locales: Record<SupportedLocale, LocaleTabState>;
+  locales: Record<string, LocaleTabState>;
 }
 
 interface TagFormProps {
   defaultValues?: Partial<TagFormValues>;
   onSubmit: (values: TagFormValues) => void | Promise<void>;
   isSubmitting?: boolean;
-  slugErrors?: Partial<Record<SupportedLocale, string>>;
+  slugErrors?: Partial<Record<string, string>>;
   onCancel?: () => void;
   onDelete?: () => void;
   title?: string;
@@ -100,11 +94,12 @@ function defaultLocaleTab(): LocaleTabState {
 }
 
 function buildDefaultLocales(
+  activeLocales: string[],
   partial?: Partial<TagFormValues>,
-): Record<SupportedLocale, LocaleTabState> {
-  const defaults = partial?.locales ?? {} as Partial<Record<SupportedLocale, LocaleTabState>>;
-  const result = {} as Record<SupportedLocale, LocaleTabState>;
-  for (const locale of SUPPORTED_LOCALES) {
+): Record<string, LocaleTabState> {
+  const defaults = partial?.locales ?? {} as Partial<Record<string, LocaleTabState>>;
+  const result: Record<string, LocaleTabState> = {};
+  for (const locale of activeLocales) {
     const existing = defaults[locale];
     result[locale] = {
       ...defaultLocaleTab(),
@@ -124,9 +119,9 @@ function isLocaleTranslated(state: LocaleTabState): boolean {
 // ---------------------------------------------------------------------------
 
 interface LocaleTabProps {
-  locale: SupportedLocale;
+  locale: string;
   state: LocaleTabState;
-  onChange: (locale: SupportedLocale, patch: Partial<LocaleTabState>) => void;
+  onChange: (locale: string, patch: Partial<LocaleTabState>) => void;
   isSubmitting: boolean;
   slugError?: string;
 }
@@ -210,22 +205,34 @@ export function TagForm({
   onDelete,
   title,
 }: TagFormProps) {
-  const [locales, setLocales] = useState<Record<SupportedLocale, LocaleTabState>>(
-    () => buildDefaultLocales(defaultValues),
+  const { allLocales, localeLabels, defaultLanguage } = useLanguages();
+
+  const [locales, setLocales] = useState<Record<string, LocaleTabState>>(
+    () => buildDefaultLocales(allLocales, defaultValues),
   );
 
-  // Drive the status pill and sidebar status select from the active locale (EN).
-  // In practice each locale has its own status, but the pill reflects EN.
-  const enStatus = locales.en.status;
+  // When language settings change, ensure new locales have default state entries
+  const activeLocales = allLocales.length > 0 ? allLocales : ['en'];
 
-  const isSubmitDisabled = isSubmitting || !locales.en.name.trim();
+  // Sync locales state when activeLocales changes (new languages added in settings)
+  const enrichedLocales = { ...locales };
+  for (const locale of activeLocales) {
+    if (!enrichedLocales[locale]) {
+      enrichedLocales[locale] = defaultLocaleTab();
+    }
+  }
 
-  function handleLocaleChange(locale: SupportedLocale, patch: Partial<LocaleTabState>) {
-    setLocales((prev) => ({ ...prev, [locale]: { ...prev[locale], ...patch } }));
+  // Drive the status pill from the default locale.
+  const defaultLocale = defaultLanguage?.locale ?? activeLocales[0] ?? 'en';
+
+  const isSubmitDisabled = isSubmitting || !(enrichedLocales[defaultLocale]?.name?.trim());
+
+  function handleLocaleChange(locale: string, patch: Partial<LocaleTabState>) {
+    setLocales((prev) => ({ ...prev, [locale]: { ...(prev[locale] ?? defaultLocaleTab()), ...patch } }));
   }
 
   function buildValues(): TagFormValues {
-    return { locales };
+    return { locales: enrichedLocales };
   }
 
   function handleSave(e: React.MouseEvent) {
@@ -240,12 +247,12 @@ export function TagForm({
     onSubmit(buildValues());
   }
 
-  const displayTitle = title ?? (locales.en.name.trim() || 'New tag');
+  const displayTitle = title ?? ((enrichedLocales[defaultLocale]?.name?.trim()) || 'New tag');
 
   // Active locale tracked via Tabs — needed to wire the sidebar status/SEO
   // to the correct locale. We use a controlled tab and expose a setter.
-  const [activeLocale, setActiveLocale] = useState<SupportedLocale>('en');
-  const activeState = locales[activeLocale];
+  const [activeLocale, setActiveLocale] = useState<string>(defaultLocale);
+  const activeState = enrichedLocales[activeLocale] ?? defaultLocaleTab();
 
   return (
     <form onSubmit={handleSubmit} noValidate>
@@ -309,11 +316,11 @@ export function TagForm({
         <div className="flex-1 min-w-0">
           <Tabs
             value={activeLocale}
-            onValueChange={(v) => setActiveLocale(v as SupportedLocale)}
+            onValueChange={(v) => setActiveLocale(v as string)}
           >
             <TabsList variant="line" className="w-full justify-start">
-              {SUPPORTED_LOCALES.map((locale) => {
-                const translated = isLocaleTranslated(locales[locale]);
+              {activeLocales.map((locale) => {
+                const translated = isLocaleTranslated(enrichedLocales[locale] ?? defaultLocaleTab());
                 return (
                   <TabsTrigger key={locale} value={locale} variant="line" className="gap-1.5 items-center">
                     <span
@@ -323,17 +330,17 @@ export function TagForm({
                       )}
                       aria-hidden="true"
                     />
-                    <span>{LOCALE_LABELS[locale]}</span>
+                    <span>{localeLabels[locale] ?? locale}</span>
                   </TabsTrigger>
                 );
               })}
             </TabsList>
 
-            {SUPPORTED_LOCALES.map((locale) => (
+            {activeLocales.map((locale) => (
               <TabsContent key={locale} value={locale}>
                 <LocaleTabContent
                   locale={locale}
-                  state={locales[locale]}
+                  state={enrichedLocales[locale] ?? defaultLocaleTab()}
                   onChange={handleLocaleChange}
                   isSubmitting={isSubmitting}
                   slugError={slugErrors[locale]}
@@ -350,7 +357,7 @@ export function TagForm({
           <div className="rounded-lg border border-slate-200 bg-white p-4 space-y-3">
             <div className="space-y-1.5">
               <Label htmlFor="tag-status">
-                Status <span className="text-xs text-slate-400">({LOCALE_LABELS[activeLocale]})</span>
+                Status <span className="text-xs text-slate-400">({localeLabels[activeLocale] ?? activeLocale})</span>
               </Label>
               <Select
                 value={activeState.status}

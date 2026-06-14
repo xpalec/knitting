@@ -19,7 +19,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { EntryForm } from '@/components/entries/entry-form';
 import type { EntryFormValues, SupportedLocale, BlockEditorState } from '@/components/entries/entry-form';
-import { SUPPORTED_LOCALES } from '@/components/entries/entry-form';
 
 // ---------------------------------------------------------------------------
 // Helper — map API Entry → EntryFormValues
@@ -29,13 +28,20 @@ let _idSeq = 1000;
 function nextId() { return `b-${_idSeq++}`; }
 
 function mapEntryToFormValues(entry: Entry): EntryFormValues {
-  const locales = {} as EntryFormValues['locales'];
+  const locales: EntryFormValues['locales'] = {};
 
   // Block structure comes from the linked template (ordered list of slots).
   // Per-locale content comes from Translation.blocks[order].
   const templateBlocks = entry.entry_template?.blocks ?? [];
 
-  for (const locale of SUPPORTED_LOCALES) {
+  // Build locale data for all locales that have existing translations.
+  // The form's dynamic locale list (from language settings) controls which tabs are shown;
+  // this mapping just preserves any existing translation data.
+  const translationLocales = (entry.translations ?? []).map((t) => t.locale);
+  // Also ensure we populate any standard locales even if not yet translated
+  const allLocales = Array.from(new Set([...translationLocales]));
+
+  for (const locale of allLocales) {
     const t = entry.translations?.find((tr) => tr.locale === locale);
     const translationBlocks = t?.blocks ?? {};
 
@@ -154,12 +160,12 @@ export default function EntryEditPage({ params }: { params: Promise<{ id: string
       }
 
       // 3. Upsert translations for each locale that has a title
-      const locales = Object.keys(values.locales) as SupportedLocale[];
+      const locales = Object.keys(values.locales) as string[];
       await Promise.all(
         locales
-          .filter((locale) => values.locales[locale].title.trim())
+          .filter((locale) => values.locales[locale]?.title?.trim())
           .map((locale) => {
-            const ls = values.locales[locale];
+            const ls = values.locales[locale]!;
             // Serialize block content keyed by stable block UUID
             const blocks: Record<string, { content?: unknown }> = {};
             for (const b of ls.blocks) {
@@ -242,16 +248,6 @@ export default function EntryEditPage({ params }: { params: Promise<{ id: string
   return (
     <>
       <div className="p-6">
-        {/* Back link */}
-        <div className="mb-4">
-          <Button variant="ghost" size="sm" asChild className="gap-1.5 text-slate-600 -ml-2">
-            <Link href="/entries">
-              <ArrowLeft size={16} aria-hidden="true" />
-              Back to Entries
-            </Link>
-          </Button>
-        </div>
-
         <EntryForm
           defaultValues={mapEntryToFormValues(entry)}
           categories={categoriesData?.data}

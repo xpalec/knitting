@@ -31,6 +31,7 @@ import {
 import type { ArticleStatus, ArticleLocale } from '@/lib/api/articles';
 import { ARTICLE_SUPPORTED_LOCALES, ARTICLE_LOCALE_LABELS } from '@/lib/api/articles';
 import { hasAtLeastOneCompleteLocale, type ValidationRule } from '@/lib/validation';
+import { useLanguages } from '@/hooks/useLanguages';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -97,7 +98,7 @@ export interface ArticleEditorFormValues {
   author: string;
   cover_image_url: string | undefined;
   category_id: string;
-  locales: Record<ArticleLocale, ArticleLocaleTabState>;
+  locales: Record<string, ArticleLocaleTabState>;
   blocks: ArticleBlockState[];
 }
 
@@ -128,11 +129,12 @@ function defaultLocaleTab(): ArticleLocaleTabState {
 }
 
 function buildDefaultLocales(
+  activeLocales: string[],
   partial?: Partial<ArticleEditorFormValues>,
-): Record<ArticleLocale, ArticleLocaleTabState> {
-  const result = {} as Record<ArticleLocale, ArticleLocaleTabState>;
-  for (const locale of ARTICLE_SUPPORTED_LOCALES) {
-    result[locale] = { ...defaultLocaleTab(), ...(partial?.locales?.[locale] ?? {}) };
+): Record<string, ArticleLocaleTabState> {
+  const result: Record<string, ArticleLocaleTabState> = {};
+  for (const locale of activeLocales) {
+    result[locale] = { ...defaultLocaleTab(), ...(partial?.locales?.[locale as ArticleLocale] ?? {}) };
   }
   return result;
 }
@@ -557,39 +559,51 @@ export function ArticleEditorForm({
   title,
   validationRules,
 }: ArticleEditorFormProps) {
+  const { allLocales, localeLabels, defaultLanguage } = useLanguages();
+  const activeLocales = allLocales.length > 0 ? allLocales : ['en'];
+  const defaultLocale = defaultLanguage?.locale ?? activeLocales[0] ?? 'en';
+
   const [status, setStatus] = useState<ArticleStatus>(defaultValues?.status ?? 'draft');
   const [tags, setTags] = useState<string[]>(defaultValues?.tags ?? []);
   const [author, setAuthor] = useState(defaultValues?.author ?? '');
   const [coverImageUrl, setCoverImageUrl] = useState<string | undefined>(defaultValues?.cover_image_url);
   const [categoryId, setCategoryId] = useState(defaultValues?.category_id ?? '');
-  const [locales, setLocales] = useState<Record<ArticleLocale, ArticleLocaleTabState>>(
-    () => buildDefaultLocales(defaultValues),
+  const [locales, setLocales] = useState<Record<string, ArticleLocaleTabState>>(
+    () => buildDefaultLocales(activeLocales, defaultValues),
   );
   const [blocks, setBlocks] = useState<ArticleBlockState[]>(defaultValues?.blocks ?? []);
+
+  // Ensure any newly added languages get a default state entry
+  const enrichedLocales = { ...locales };
+  for (const locale of activeLocales) {
+    if (!enrichedLocales[locale]) {
+      enrichedLocales[locale] = defaultLocaleTab();
+    }
+  }
 
   const LOCALE_COMPLETENESS_MESSAGE = 'At least one language must have both a title and slug filled.';
 
   const allErrors = useMemo(() => {
-    const localeErr = hasAtLeastOneCompleteLocale(locales)
+    const localeErr = hasAtLeastOneCompleteLocale(enrichedLocales)
       ? []
       : [LOCALE_COMPLETENESS_MESSAGE];
     const currentValues: ArticleEditorFormValues = {
-      status, tags, author, cover_image_url: coverImageUrl, category_id: categoryId, locales, blocks,
+      status, tags, author, cover_image_url: coverImageUrl, category_id: categoryId, locales: enrichedLocales, blocks,
     };
     const ruleErrs = (validationRules ?? [])
       .map((rule) => rule(currentValues))
       .filter((msg): msg is string => msg !== null);
     return [...localeErr, ...ruleErrs];
-  }, [locales, validationRules, blocks, status, tags, author, coverImageUrl, categoryId]);
+  }, [enrichedLocales, validationRules, blocks, status, tags, author, coverImageUrl, categoryId]);
 
   const isSubmitDisabled = isSubmitting || allErrors.length > 0;
 
-  function handleLocaleChange(locale: ArticleLocale, patch: Partial<ArticleLocaleTabState>) {
-    setLocales((prev) => ({ ...prev, [locale]: { ...prev[locale], ...patch } }));
+  function handleLocaleChange(locale: string, patch: Partial<ArticleLocaleTabState>) {
+    setLocales((prev) => ({ ...prev, [locale]: { ...(prev[locale] ?? defaultLocaleTab()), ...patch } }));
   }
 
   function buildValues(): ArticleEditorFormValues {
-    return { status, tags, author, cover_image_url: coverImageUrl, category_id: categoryId, locales, blocks };
+    return { status, tags, author, cover_image_url: coverImageUrl, category_id: categoryId, locales: enrichedLocales, blocks };
   }
 
   function handleSave(e: React.MouseEvent) {
@@ -611,7 +625,7 @@ export function ArticleEditorForm({
     onSubmit(buildValues());
   }
 
-  const displayTitle = title ?? (locales.en.title.trim() || 'New article');
+  const displayTitle = title ?? (enrichedLocales[defaultLocale]?.title?.trim() || 'New article');
 
   return (
     <form onSubmit={handleSubmit} noValidate>
@@ -689,10 +703,11 @@ export function ArticleEditorForm({
 
         {/* Left: language tabs */}
         <div className="flex-1 min-w-0">
-          <Tabs defaultValue="en">
+          <Tabs defaultValue={defaultLocale}>
             <TabsList variant="line" className="w-full justify-start">
-              {ARTICLE_SUPPORTED_LOCALES.map((locale) => {
-                const isComplete = locales[locale].title.trim().length > 0 && locales[locale].slug.trim().length > 0;
+              {activeLocales.map((locale) => {
+                const localeState = enrichedLocales[locale] ?? defaultLocaleTab();
+                const isComplete = localeState.title.trim().length > 0 && localeState.slug.trim().length > 0;
                 return (
                   <TabsTrigger key={locale} value={locale} variant="line" className="gap-1.5">
                     <span
@@ -702,17 +717,17 @@ export function ArticleEditorForm({
                       )}
                       aria-hidden="true"
                     />
-                    {ARTICLE_LOCALE_LABELS[locale]}
+                    {localeLabels[locale] ?? locale}
                   </TabsTrigger>
                 );
               })}
             </TabsList>
 
-            {ARTICLE_SUPPORTED_LOCALES.map((locale) => (
+            {activeLocales.map((locale) => (
               <TabsContent key={locale} value={locale}>
                 <LocaleTabContent
-                  locale={locale}
-                  state={locales[locale]}
+                  locale={locale as ArticleLocale}
+                  state={enrichedLocales[locale] ?? defaultLocaleTab()}
                   blocks={blocks}
                   isSubmitting={isSubmitting}
                   onLocaleChange={(patch) => handleLocaleChange(locale, patch)}
@@ -774,16 +789,18 @@ export function ArticleEditorForm({
 
               {/* SEO tab — per locale */}
               <TabsContent value="seo" className="p-4 mt-0">
-                <Tabs defaultValue="en">
+                <Tabs defaultValue={defaultLocale}>
                   <TabsList variant="line" className="w-full justify-start mb-4">
-                    {ARTICLE_SUPPORTED_LOCALES.map((locale) => (
+                    {activeLocales.map((locale) => (
                       <TabsTrigger key={locale} value={locale} variant="line" className="text-xs">
-                        {ARTICLE_LOCALE_LABELS[locale]}
+                        {localeLabels[locale] ?? locale}
                       </TabsTrigger>
                     ))}
                   </TabsList>
 
-                  {ARTICLE_SUPPORTED_LOCALES.map((locale) => (
+                  {activeLocales.map((locale) => {
+                    const localeState = enrichedLocales[locale] ?? defaultLocaleTab();
+                    return (
                     <TabsContent key={locale} value={locale} className="space-y-4 mt-0">
                       <div className="space-y-1.5">
                         <Label htmlFor={`seo-title-${locale}`} className="text-xs text-slate-500">
@@ -791,7 +808,7 @@ export function ArticleEditorForm({
                         </Label>
                         <Input
                           id={`seo-title-${locale}`}
-                          value={locales[locale].seoTitle}
+                          value={localeState.seoTitle}
                           onChange={(e) =>
                             handleLocaleChange(locale, {
                               seoTitle: e.target.value.slice(0, SEO_TITLE_MAX),
@@ -802,7 +819,7 @@ export function ArticleEditorForm({
                           className="text-sm"
                         />
                         <p className="text-xs text-slate-400 text-right">
-                          {locales[locale].seoTitle.length}/{SEO_TITLE_MAX}
+                          {localeState.seoTitle.length}/{SEO_TITLE_MAX}
                         </p>
                       </div>
 
@@ -812,7 +829,7 @@ export function ArticleEditorForm({
                         </Label>
                         <Textarea
                           id={`seo-desc-${locale}`}
-                          value={locales[locale].seoDescription}
+                          value={localeState.seoDescription}
                           onChange={(e) =>
                             handleLocaleChange(locale, {
                               seoDescription: e.target.value.slice(0, SEO_DESC_MAX),
@@ -824,11 +841,12 @@ export function ArticleEditorForm({
                           className="text-sm resize-none"
                         />
                         <p className="text-xs text-slate-400 text-right">
-                          {locales[locale].seoDescription.length}/{SEO_DESC_MAX}
+                          {localeState.seoDescription.length}/{SEO_DESC_MAX}
                         </p>
                       </div>
                     </TabsContent>
-                  ))}
+                    );
+                  })}
                 </Tabs>
               </TabsContent>
             </Tabs>

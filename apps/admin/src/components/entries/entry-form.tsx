@@ -41,20 +41,15 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { useLanguages } from '@/hooks/useLanguages';
 
 // ---------------------------------------------------------------------------
-// Constants
+// Constants (kept for backward compatibility — dynamic list comes from store)
 // ---------------------------------------------------------------------------
 
+/** @deprecated Use useLanguages() hook instead. Kept for TypeScript type compatibility. */
 export const SUPPORTED_LOCALES = ['en', 'pl', 'fr', 'de'] as const;
-export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
-
-const LOCALE_LABELS: Record<SupportedLocale, string> = {
-  en: 'English',
-  pl: 'Polish',
-  fr: 'French',
-  de: 'German',
-};
+export type SupportedLocale = string;
 
 const SEO_TITLE_MAX = 60;
 const SEO_DESC_MAX = 160;
@@ -106,7 +101,7 @@ export interface EntryFormValues {
   synonyms: string[];
   tags: string[];
   abbreviations: string[];
-  locales: Record<SupportedLocale, LocaleTabState>;
+  locales: Record<string, LocaleTabState>;
 }
 
 export interface EntryFormProps {
@@ -146,10 +141,11 @@ function defaultLocaleTab(): LocaleTabState {
 }
 
 function buildDefaultLocales(
+  activeLocales: string[],
   partial?: Partial<EntryFormValues>,
-): Record<SupportedLocale, LocaleTabState> {
-  const result = {} as Record<SupportedLocale, LocaleTabState>;
-  for (const locale of SUPPORTED_LOCALES) {
+): Record<string, LocaleTabState> {
+  const result: Record<string, LocaleTabState> = {};
+  for (const locale of activeLocales) {
     result[locale] = {
       ...defaultLocaleTab(),
       ...(partial?.locales?.[locale] ?? {}),
@@ -727,6 +723,10 @@ export function EntryForm({
   title,
   validationRules,
 }: EntryFormProps) {
+  const { allLocales, localeLabels, defaultLanguage } = useLanguages();
+  const activeLocales = allLocales.length > 0 ? allLocales : ['en'];
+  const defaultLocale = defaultLanguage?.locale ?? activeLocales[0] ?? 'en';
+
   const [entryTemplateId, setEntryTemplateId] = useState(defaultValues?.entryTemplateId ?? '');
   const [categoryId, setCategoryId] = useState(defaultValues?.categoryId ?? '');
 
@@ -737,7 +737,7 @@ export function EntryForm({
     // Build BlockEditorState[] from the template's block list, per locale so headings are correct
     setLocales((prev) => {
       const next = { ...prev } as typeof prev;
-      for (const locale of SUPPORTED_LOCALES) {
+      for (const locale of activeLocales) {
         const localeBlocks: BlockEditorState[] = tpl.blocks
           .slice()
           .sort((a, b) => a.order - b.order)
@@ -753,7 +753,7 @@ export function EntryForm({
             required: b.required,
             order: i + 1,
           }));
-        next[locale] = { ...next[locale], blocks: localeBlocks };
+        next[locale] = { ...(next[locale] ?? defaultLocaleTab()), blocks: localeBlocks };
       }
       return next;
     });
@@ -762,14 +762,22 @@ export function EntryForm({
   const [synonyms, setSynonyms] = useState<string[]>(defaultValues?.synonyms ?? []);
   const [tags, setTags] = useState<string[]>(defaultValues?.tags ?? []);
   const [abbreviations, setAbbreviations] = useState<string[]>(defaultValues?.abbreviations ?? []);
-  const [locales, setLocales] = useState<Record<SupportedLocale, LocaleTabState>>(
-    () => buildDefaultLocales(defaultValues),
+  const [locales, setLocales] = useState<Record<string, LocaleTabState>>(
+    () => buildDefaultLocales(activeLocales, defaultValues),
   );
+
+  // Ensure any newly added languages get a default state entry
+  const enrichedLocales = { ...locales };
+  for (const locale of activeLocales) {
+    if (!enrichedLocales[locale]) {
+      enrichedLocales[locale] = defaultLocaleTab();
+    }
+  }
 
   const LOCALE_COMPLETENESS_MESSAGE = 'At least one language must have both a title and slug filled.';
 
   const allErrors = useMemo(() => {
-    const localeErr = hasAtLeastOneCompleteLocale(locales)
+    const localeErr = hasAtLeastOneCompleteLocale(enrichedLocales)
       ? []
       : [LOCALE_COMPLETENESS_MESSAGE];
     const ruleErrs = (validationRules ?? [])
@@ -777,16 +785,16 @@ export function EntryForm({
       .filter((msg): msg is string => msg !== null);
     return [...localeErr, ...ruleErrs];
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [locales, validationRules]);
+  }, [enrichedLocales, validationRules]);
 
   const isSubmitDisabled = isSubmitting || allErrors.length > 0;
 
-  function handleLocaleChange(locale: SupportedLocale, patch: Partial<LocaleTabState>) {
-    setLocales((prev) => ({ ...prev, [locale]: { ...prev[locale], ...patch } }));
+  function handleLocaleChange(locale: string, patch: Partial<LocaleTabState>) {
+    setLocales((prev) => ({ ...prev, [locale]: { ...(prev[locale] ?? defaultLocaleTab()), ...patch } }));
   }
 
   function buildValues(): EntryFormValues {
-    return { entryTemplateId, categoryId, status, synonyms, tags, abbreviations, locales };
+    return { entryTemplateId, categoryId, status, synonyms, tags, abbreviations, locales: enrichedLocales };
   }
 
   function handleSave(e: React.MouseEvent) {
@@ -807,7 +815,7 @@ export function EntryForm({
     onSubmit(buildValues());
   }
 
-  const displayTitle = title ?? (locales.en.title.trim() || 'New entry');
+  const displayTitle = title ?? (enrichedLocales[defaultLocale]?.title?.trim() || 'New entry');
 
   return (
     <form onSubmit={handleSubmit} noValidate>
@@ -895,10 +903,11 @@ export function EntryForm({
 
         {/* ── Left: language tabs ──────────────────────────────────── */}
         <div className="flex-1 min-w-0">
-          <Tabs defaultValue="en">
+          <Tabs defaultValue={defaultLocale}>
             <TabsList variant="line" className="w-full justify-start">
-              {SUPPORTED_LOCALES.map((locale) => {
-                const isComplete = locales[locale].title.trim().length > 0 && locales[locale].slug.trim().length > 0;
+              {activeLocales.map((locale) => {
+                const localeState = enrichedLocales[locale] ?? defaultLocaleTab();
+                const isComplete = localeState.title.trim().length > 0 && localeState.slug.trim().length > 0;
                 return (
                   <TabsTrigger key={locale} value={locale} variant="line" className="gap-1.5">
                     <span
@@ -908,17 +917,17 @@ export function EntryForm({
                       )}
                       aria-hidden="true"
                     />
-                    {LOCALE_LABELS[locale]}
+                    {localeLabels[locale] ?? locale}
                   </TabsTrigger>
                 );
               })}
             </TabsList>
 
-            {SUPPORTED_LOCALES.map((locale) => (
+            {activeLocales.map((locale) => (
               <TabsContent key={locale} value={locale}>
                 <LocaleTabContent
                   locale={locale}
-                  state={locales[locale]}
+                  state={enrichedLocales[locale] ?? defaultLocaleTab()}
                   contentBlockTypes={contentBlockTypes}
                   isSubmitting={isSubmitting}
                   onChange={(patch) => handleLocaleChange(locale, patch)}
@@ -1012,31 +1021,31 @@ export function EntryForm({
                   <Label htmlFor="seo-title-en" className="text-xs text-slate-500">SEO Title</Label>
                   <Input
                     id="seo-title-en"
-                    value={locales.en.seoTitle}
+                    value={enrichedLocales[defaultLocale]?.seoTitle ?? ''}
                     onChange={(e) =>
-                      handleLocaleChange('en', { seoTitle: e.target.value.slice(0, SEO_TITLE_MAX) })
+                      handleLocaleChange(defaultLocale, { seoTitle: e.target.value.slice(0, SEO_TITLE_MAX) })
                     }
                     placeholder="SEO title…"
                     disabled={isSubmitting}
                     className="text-sm"
                   />
-                  <p className="text-xs text-slate-400 text-right">{locales.en.seoTitle.length}/{SEO_TITLE_MAX}</p>
+                  <p className="text-xs text-slate-400 text-right">{(enrichedLocales[defaultLocale]?.seoTitle ?? '').length}/{SEO_TITLE_MAX}</p>
                 </div>
 
                 <div className="space-y-1.5">
                   <Label htmlFor="seo-desc-en" className="text-xs text-slate-500">SEO Description</Label>
                   <Textarea
                     id="seo-desc-en"
-                    value={locales.en.seoDescription}
+                    value={enrichedLocales[defaultLocale]?.seoDescription ?? ''}
                     onChange={(e) =>
-                      handleLocaleChange('en', { seoDescription: e.target.value.slice(0, SEO_DESC_MAX) })
+                      handleLocaleChange(defaultLocale, { seoDescription: e.target.value.slice(0, SEO_DESC_MAX) })
                     }
                     placeholder="SEO description…"
                     disabled={isSubmitting}
                     rows={4}
                     className="text-sm resize-none"
                   />
-                  <p className="text-xs text-slate-400 text-right">{locales.en.seoDescription.length}/{SEO_DESC_MAX}</p>
+                  <p className="text-xs text-slate-400 text-right">{(enrichedLocales[defaultLocale]?.seoDescription ?? '').length}/{SEO_DESC_MAX}</p>
                 </div>
               </TabsContent>
             </Tabs>
