@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Save, Trash2, X, Upload, ChevronDown, ChevronUp,
   GripVertical, MoreHorizontal, Plus, Check, ChevronsUpDown,
@@ -34,6 +34,13 @@ import type { EntryStatus } from '@/lib/api/entries';
 import type { AdminCategory } from '@/lib/api/categories';
 import type { EntryTemplate } from '@/lib/api/entry-templates';
 import type { ContentBlockType } from '@/lib/api/content-block-types';
+import { hasAtLeastOneCompleteLocale, type ValidationRule } from '@/lib/validation';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -116,6 +123,7 @@ export interface EntryFormProps {
   onCancel?: () => void;
   onDelete?: () => void;
   title?: string;
+  validationRules?: ValidationRule<EntryFormValues>[];
 }
 
 // ---------------------------------------------------------------------------
@@ -556,6 +564,11 @@ function LocaleTabContent({
               disabled={isSubmitting}
               className="font-mono text-sm text-slate-500"
             />
+            {state.title.trim() && !state.slug.trim() && (
+              <p className="text-xs text-amber-600">
+                Add a slug to make this locale complete.
+              </p>
+            )}
           </div>
         </div>
 
@@ -712,6 +725,7 @@ export function EntryForm({
   onCancel,
   onDelete,
   title,
+  validationRules,
 }: EntryFormProps) {
   const [entryTemplateId, setEntryTemplateId] = useState(defaultValues?.entryTemplateId ?? '');
   const [categoryId, setCategoryId] = useState(defaultValues?.categoryId ?? '');
@@ -752,7 +766,20 @@ export function EntryForm({
     () => buildDefaultLocales(defaultValues),
   );
 
-  const isSubmitDisabled = isSubmitting || !locales.en.title.trim();
+  const LOCALE_COMPLETENESS_MESSAGE = 'At least one language must have both a title and slug filled.';
+
+  const allErrors = useMemo(() => {
+    const localeErr = hasAtLeastOneCompleteLocale(locales)
+      ? []
+      : [LOCALE_COMPLETENESS_MESSAGE];
+    const ruleErrs = (validationRules ?? [])
+      .map((rule) => rule(buildValues()))
+      .filter((msg): msg is string => msg !== null);
+    return [...localeErr, ...ruleErrs];
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locales, validationRules]);
+
+  const isSubmitDisabled = isSubmitting || allErrors.length > 0;
 
   function handleLocaleChange(locale: SupportedLocale, patch: Partial<LocaleTabState>) {
     setLocales((prev) => ({ ...prev, [locale]: { ...prev[locale], ...patch } }));
@@ -830,7 +857,7 @@ export function EntryForm({
               variant="outline"
               type="button"
               onClick={handleSaveDraft}
-              disabled={isSubmitting}
+              disabled={isSubmitDisabled}
               className="gap-1.5"
             >
               <Save size={14} aria-hidden="true" />
@@ -838,15 +865,28 @@ export function EntryForm({
             </Button>
           )}
 
-          <Button
-            type="button"
-            onClick={handleSave}
-            disabled={isSubmitDisabled}
-            className="gap-1.5 bg-violet-600 hover:bg-violet-700 text-white"
-          >
-            <Plus size={14} aria-hidden="true" />
-            {isSubmitting ? 'Publishing…' : 'Publish'}
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <Button
+                    type="button"
+                    onClick={handleSave}
+                    disabled={isSubmitDisabled}
+                    className="gap-1.5 bg-violet-600 hover:bg-violet-700 text-white"
+                  >
+                    <Plus size={14} aria-hidden="true" />
+                    {isSubmitting ? 'Publishing…' : 'Publish'}
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              {isSubmitDisabled && allErrors.length > 0 && (
+                <TooltipContent>
+                  <p>{allErrors[0]}</p>
+                </TooltipContent>
+              )}
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </div>
 
@@ -858,13 +898,13 @@ export function EntryForm({
           <Tabs defaultValue="en">
             <TabsList variant="line" className="w-full justify-start">
               {SUPPORTED_LOCALES.map((locale) => {
-                const hasTitle = locales[locale].title.trim().length > 0;
+                const isComplete = locales[locale].title.trim().length > 0 && locales[locale].slug.trim().length > 0;
                 return (
                   <TabsTrigger key={locale} value={locale} variant="line" className="gap-1.5">
                     <span
                       className={cn(
                         'h-1.5 w-1.5 rounded-full shrink-0 transition-colors',
-                        hasTitle ? 'bg-green-500' : 'bg-transparent',
+                        isComplete ? 'bg-green-500' : 'bg-transparent',
                       )}
                       aria-hidden="true"
                     />
