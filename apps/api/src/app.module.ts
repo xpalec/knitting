@@ -35,6 +35,7 @@ import { AdminBlockTemplateModule } from './admin/block-template/admin-block-tem
 import { AdminContentBlockTypeModule } from './admin/content-block-type/admin-content-block-type.module';
 import { AdminEntryTemplateModule } from './admin/entry-template/admin-entry-template.module';
 import { AdminStatsModule } from './admin/stats/admin-stats.module';
+import { AdminArticleModule } from './admin/article/admin-article.module';
 import { UserModule } from './user/user.module';
 import { MediaModule } from './media/media.module';
 
@@ -81,6 +82,7 @@ const REDIS_URL = process.env.REDIS_URL ?? 'redis://localhost:6379';
     AdminContentBlockTypeModule,
     AdminEntryTemplateModule,
     AdminStatsModule,
+    AdminArticleModule,
     UserModule,
     MediaModule,
   ],

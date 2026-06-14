@@ -5,9 +5,11 @@ import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
-import { articlesApi } from '@/lib/api/articles';
+import {
+  articlesApi,
+  ARTICLE_SUPPORTED_LOCALES,
+} from '@/lib/api/articles';
 import type { Article, ArticleLocale, ArticleStatus } from '@/lib/api/articles';
-import { ARTICLE_SUPPORTED_LOCALES } from '@/lib/api/articles';
 import { ApiError } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
 
@@ -44,27 +46,43 @@ function mapArticleToFormValues(article: Article): ArticleEditorFormValues {
     };
   }
 
-  // Map content blocks
+  // Map content_blocks layout manifest + per-locale block content from translations
   const blocks: ArticleBlockState[] = (article.content_blocks ?? [])
     .slice()
     .sort((a, b) => a.order - b.order)
-    .map((b) => ({
-      _id: nextId(),
-      blockId: b.id,
-      type: b.type,
-      label: b.label ?? b.type,
-      order: b.order,
-      visible: b.visible,
-      required: b.required,
-      locales: (b.translations ?? {}) as ArticleBlockState['locales'],
-    }));
+    .map((b) => {
+      // Collect per-locale block content from each translation's blocks field
+      const localeData: ArticleBlockState['locales'] = {};
+      for (const locale of ARTICLE_SUPPORTED_LOCALES) {
+        const t = article.translations?.find((tr) => tr.locale === locale);
+        const blockData = t?.blocks?.[b.id];
+        if (blockData) {
+          localeData[locale] = {
+            heading: blockData.heading ?? '',
+            content: blockData.content ?? null,
+          };
+        }
+      }
+      return {
+        _id: nextId(),
+        blockId: b.id,
+        type: b.type,
+        label: b.label ?? b.type,
+        order: b.order,
+        visible: b.visible,
+        required: b.required,
+        locales: localeData,
+      };
+    });
+
+  // Tags — we store tag IDs in the form (the editor chips show names via lookup)
+  const tags = article.tags?.map((t) => t.id) ?? [];
 
   return {
     status: article.status ?? 'draft',
-    tags: article.tags ?? [],
-    country: article.country ?? '',
+    tags,
     author: article.author ?? '',
-    cover_image_url: article.cover_image_url,
+    cover_image_url: article.cover_image_url ?? undefined,
     category_id: article.category_id ?? '',
     locales,
     blocks,
@@ -107,27 +125,33 @@ export default function EditArticlePage({ params }: { params: Promise<{ id: stri
 
   const updateMutation = useMutation({
     mutationFn: async (values: ArticleEditorFormValues) => {
-      // 1. Update flat fields
+      // 1. Update language-independent fields
       await articlesApi.updateArticle(id, {
-        tags: values.tags.length ? values.tags : undefined,
-        country: values.country || undefined,
-        author: values.author || undefined,
-        cover_image_url: values.cover_image_url,
-        category_id: values.category_id || undefined,
+        category_id: values.category_id || null,
+        cover_image_url: values.cover_image_url ?? null,
+        author: values.author || null,
+        status: values.status as ArticleStatus,
       });
 
-      // 2. Update status if changed
-      if (article && values.status !== article.status) {
-        await articlesApi.updateArticleStatus(id, values.status as ArticleStatus);
-      }
+      // 2. Update content_blocks layout manifest
+      await articlesApi.updateBlocks(
+        id,
+        values.blocks.map((b) => ({
+          id: b.blockId,
+          type: b.type,
+          label: b.label,
+          order: b.order,
+          visible: b.visible,
+          required: b.required,
+        })),
+      );
 
-      // 3. Upsert translations per locale
+      // 3. Upsert translations for locales that have a title
       await Promise.all(
         ARTICLE_SUPPORTED_LOCALES
           .filter((locale) => values.locales[locale].title.trim())
           .map((locale) => {
             const ls = values.locales[locale];
-            // Collect per-block content for this locale
             const blockPayload: Record<string, { heading?: string; content?: unknown }> = {};
             for (const block of values.blocks) {
               const blockLocale = block.locales[locale];
@@ -138,10 +162,9 @@ export default function EditArticlePage({ params }: { params: Promise<{ id: stri
                 };
               }
             }
-
-            return articlesApi.updateTranslation(id, locale, {
+            return articlesApi.upsertTranslation(id, locale, {
               title: ls.title.trim(),
-              slug: ls.slug.trim() || undefined,
+              slug: ls.slug.trim(),
               short_description: ls.shortDescription.trim() || undefined,
               seo_title: ls.seoTitle.trim() || undefined,
               seo_description: ls.seoDescription.trim() || undefined,
@@ -149,13 +172,19 @@ export default function EditArticlePage({ params }: { params: Promise<{ id: stri
             });
           }),
       );
+
+      // 4. Update tags
+      await articlesApi.setTags(id, values.tags);
     },
     onSuccess: () => {
       toast.success('Article saved');
       queryClient.invalidateQueries({ queryKey: ['article', id] });
       queryClient.invalidateQueries({ queryKey: ['articles'] });
     },
-    onError: () => toast.error('Failed to save article'),
+    onError: (error) => {
+      const message = error instanceof ApiError ? error.message : 'Failed to save article';
+      toast.error(message);
+    },
   });
 
   // ── Delete mutation ──────────────────────────────────────────────────────
@@ -167,9 +196,10 @@ export default function EditArticlePage({ params }: { params: Promise<{ id: stri
       queryClient.invalidateQueries({ queryKey: ['articles'] });
       router.push('/articles');
     },
-    onError: () => {
+    onError: (error) => {
       setDeleteDialogOpen(false);
-      toast.error('Failed to delete article');
+      const message = error instanceof ApiError ? error.message : 'Failed to delete article';
+      toast.error(message);
     },
   });
 
@@ -224,9 +254,7 @@ export default function EditArticlePage({ params }: { params: Promise<{ id: stri
   // ── Render ───────────────────────────────────────────────────────────────
 
   const articleTitle =
-    article.translations?.find((t) => t.locale === 'en')?.title ??
-    article.title ??
-    'Edit article';
+    article.translations?.find((t) => t.locale === 'en')?.title ?? 'Edit article';
 
   return (
     <>

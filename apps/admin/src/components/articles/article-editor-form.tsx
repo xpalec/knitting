@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import {
-  Save, Trash2, X, Upload, ChevronDown, ChevronUp,
+  Save, Trash2, X, ChevronDown, ChevronUp,
   GripVertical, MoreHorizontal, Plus,
 } from 'lucide-react';
 
@@ -13,13 +13,6 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,23 +32,6 @@ import { ARTICLE_SUPPORTED_LOCALES, ARTICLE_LOCALE_LABELS } from '@/lib/api/arti
 const SEO_TITLE_MAX = 60;
 const SEO_DESC_MAX = 160;
 
-const COUNTRY_OPTIONS = [
-  { value: 'pl', label: 'Poland' },
-  { value: 'no', label: 'Norway' },
-  { value: 'de', label: 'Germany / Austria' },
-  { value: 'gb', label: 'UK / Ireland' },
-  { value: 'fr', label: 'France' },
-];
-
-const BLOCK_TYPE_OPTIONS = [
-  { value: 'rich_text', label: 'Rich text' },
-  { value: 'callout',   label: 'Callout' },
-  { value: 'steps',     label: 'Steps' },
-  { value: 'key_facts', label: 'Key facts' },
-  { value: 'video',     label: 'Video' },
-  { value: 'image',     label: 'Image' },
-];
-
 const BLOCK_TYPE_COLORS: Record<string, { bg: string; fg: string }> = {
   rich_text: { bg: '#EDE7FF', fg: '#7F6BBF' },
   callout:   { bg: '#FEF3C7', fg: '#B45309' },
@@ -65,8 +41,6 @@ const BLOCK_TYPE_COLORS: Record<string, { bg: string; fg: string }> = {
   image:     { bg: '#FEF9C3', fg: '#A16207' },
 };
 const BLOCK_TYPE_FALLBACK = { bg: '#EEEEF2', fg: '#8B8FA8' };
-
-const NO_COUNTRY = '__none__';
 
 // ---------------------------------------------------------------------------
 // Slug helper
@@ -78,7 +52,8 @@ export function toSlug(value: string): string {
     .trim()
     .replace(/[^a-z0-9\s]/g, '')
     .replace(/\s+/g, '-')
-    .replace(/^-+|-+$/g, '');
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
 }
 
 // ---------------------------------------------------------------------------
@@ -112,7 +87,6 @@ export interface ArticleLocaleTabState {
 export interface ArticleEditorFormValues {
   status: ArticleStatus;
   tags: string[];
-  country: string;
   author: string;
   cover_image_url: string | undefined;
   category_id: string;
@@ -571,7 +545,6 @@ export function ArticleEditorForm({
 }: ArticleEditorFormProps) {
   const [status, setStatus] = useState<ArticleStatus>(defaultValues?.status ?? 'draft');
   const [tags, setTags] = useState<string[]>(defaultValues?.tags ?? []);
-  const [country, setCountry] = useState(defaultValues?.country ?? '');
   const [author, setAuthor] = useState(defaultValues?.author ?? '');
   const [coverImageUrl, setCoverImageUrl] = useState<string | undefined>(defaultValues?.cover_image_url);
   const [categoryId, setCategoryId] = useState(defaultValues?.category_id ?? '');
@@ -587,7 +560,7 @@ export function ArticleEditorForm({
   }
 
   function buildValues(): ArticleEditorFormValues {
-    return { status, tags, country, author, cover_image_url: coverImageUrl, category_id: categoryId, locales, blocks };
+    return { status, tags, author, cover_image_url: coverImageUrl, category_id: categoryId, locales, blocks };
   }
 
   function handleSave(e: React.MouseEvent) {
@@ -722,26 +695,6 @@ export function ArticleEditorForm({
 
               {/* Details tab */}
               <TabsContent value="details" className="p-4 space-y-4 mt-0">
-                {/* Country */}
-                <div className="space-y-1.5">
-                  <Label htmlFor="article-country">Country</Label>
-                  <Select
-                    value={country || NO_COUNTRY}
-                    onValueChange={(v) => setCountry(v === NO_COUNTRY ? '' : v)}
-                    disabled={isSubmitting}
-                  >
-                    <SelectTrigger id="article-country">
-                      <SelectValue placeholder="None" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={NO_COUNTRY}>None</SelectItem>
-                      {COUNTRY_OPTIONS.map((o) => (
-                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
                 {/* Author */}
                 <div className="space-y-1.5">
                   <Label htmlFor="article-author">Author</Label>

@@ -9,7 +9,6 @@ export class ArticleService {
     const where: Record<string, unknown> = { status: 'published' };
     if (countryCode) where['country_code'] = countryCode;
     if (tag) {
-      // Filter by locale-specific TagTranslation slug
       where['tags'] = {
         some: {
           tag: {
@@ -22,6 +21,10 @@ export class ArticleService {
     const articles = await this.prisma.article.findMany({
       where,
       include: {
+        translations: {
+          where: { locale, status: 'published' },
+          select: { title: true, slug: true, short_description: true, locale: true },
+        },
         tags: {
           include: {
             tag: {
@@ -39,33 +42,42 @@ export class ArticleService {
     });
 
     return {
-      data: articles.map((a) => ({
-        slug: a.slug,
-        title: a.title,
-        cover_image_url: a.cover_image_url,
-        author: a.author,
-        country_code: a.country_code,
-        reading_time_minutes: a.reading_time_minutes,
-        published_at: a.published_at,
-        tags: a.tags.map((at) => ({
-          id: at.tag.id,
-          name: at.tag.translations[0]?.name ?? '',
-        })),
-      })),
+      data: articles
+        .filter((a) => a.translations.length > 0)
+        .map((a) => {
+          const t = a.translations[0];
+          return {
+            slug: t.slug,
+            title: t.title,
+            short_description: t.short_description,
+            cover_image_url: a.cover_image_url,
+            author: a.author,
+            country_code: a.country_code,
+            published_at: a.published_at,
+            tags: a.tags.map((at) => ({
+              id: at.tag.id,
+              name: at.tag.translations[0]?.name ?? '',
+            })),
+          };
+        }),
     };
   }
 
   async findBySlug(slug: string, locale = 'en') {
-    const article = await this.prisma.article.findUnique({
-      where: { slug },
+    const translation = await this.prisma.articleTranslation.findUnique({
+      where: { locale_slug: { locale, slug } },
       include: {
-        tags: {
+        article: {
           include: {
-            tag: {
+            tags: {
               include: {
-                translations: {
-                  where: { locale, status: 'published' },
-                  select: { name: true, locale: true },
+                tag: {
+                  include: {
+                    translations: {
+                      where: { locale, status: 'published' },
+                      select: { name: true, locale: true },
+                    },
+                  },
                 },
               },
             },
@@ -74,19 +86,26 @@ export class ArticleService {
       },
     });
 
-    if (!article) throw new NotFoundException(`Article '${slug}' not found`);
+    if (!translation || translation.article.status !== 'published') {
+      throw new NotFoundException(`Article '${slug}' not found`);
+    }
+
+    const a = translation.article;
 
     return {
       data: {
-        slug: article.slug,
-        title: article.title,
-        content: article.content,
-        cover_image_url: article.cover_image_url,
-        author: article.author,
-        country_code: article.country_code,
-        reading_time_minutes: article.reading_time_minutes,
-        published_at: article.published_at,
-        tags: article.tags.map((at) => ({
+        slug: translation.slug,
+        title: translation.title,
+        short_description: translation.short_description,
+        blocks: translation.blocks,
+        content_blocks: a.content_blocks,
+        seo_title: translation.seo_title,
+        seo_description: translation.seo_description,
+        cover_image_url: a.cover_image_url,
+        author: a.author,
+        country_code: a.country_code,
+        published_at: a.published_at,
+        tags: a.tags.map((at) => ({
           id: at.tag.id,
           name: at.tag.translations[0]?.name ?? '',
         })),

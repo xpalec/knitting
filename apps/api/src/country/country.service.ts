@@ -41,7 +41,12 @@ export class CountryService {
       }),
       this.prisma.article.findMany({
         where: { country_code: code, status: 'published' },
-        select: { slug: true, title: true, reading_time_minutes: true },
+        include: {
+          translations: {
+            where: { locale, status: 'published' },
+            select: { slug: true, title: true, locale: true },
+          },
+        },
         take: 5,
         orderBy: { published_at: 'desc' },
       }),
@@ -64,7 +69,10 @@ export class CountryService {
             missing_translation: !t,
           };
         }),
-        articles,
+        articles: articles.map((a) => {
+          const t = a.translations[0] ?? null;
+          return { slug: t?.slug ?? null, title: t?.title ?? null };
+        }),
       },
     };
 

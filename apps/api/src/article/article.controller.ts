@@ -24,7 +24,7 @@ export class ArticleController {
 
   @Public()
   @Get(':slug')
-  @ApiOperation({ summary: 'Full article detail' })
+  @ApiOperation({ summary: 'Full article detail by locale slug' })
   @ApiQuery({ name: 'locale', required: false, example: 'en' })
   findOne(
     @Param('slug') slug: string,
