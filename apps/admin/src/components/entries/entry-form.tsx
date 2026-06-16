@@ -7,12 +7,14 @@ import {
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
+import { resolveTranslation } from '@/lib/resolve-translation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
+import { MissingTranslationBadge } from '@/components/ui/missing-translation-badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Command,
@@ -32,10 +34,13 @@ import {
 
 import type { EntryStatus } from '@/lib/api/entries';
 import type { AdminCategory } from '@/lib/api/categories';
+import type { AdminTag } from '@/lib/api/tags';
 import type { EntryTemplate } from '@/lib/api/entry-templates';
 import type { ContentBlockType } from '@/lib/api/content-block-types';
 import type { Abbreviation } from '@/lib/api/abbreviations';
+import { TagsPanel } from '@/components/tags/tags-panel';
 import { hasAtLeastOneCompleteLocale, type ValidationRule } from '@/lib/validation';
+import { ValidationSummary } from '@/components/ui/validation-summary';
 import {
   Tooltip,
   TooltipContent,
@@ -93,6 +98,7 @@ export interface LocaleTabState {
   shortDescription: string;
   seoTitle: string;
   seoDescription: string;
+  synonyms: string[];
   blocks: BlockEditorState[];
 }
 
@@ -115,7 +121,6 @@ export interface EntryFormValues {
   entryTemplateId: string;
   categoryId: string;
   status: EntryStatus;
-  synonyms: string[];
   tags: string[];
   abbreviations: LinkedAbbreviationState[];
   locales: Record<string, LocaleTabState>;
@@ -125,6 +130,7 @@ export interface EntryFormProps {
   defaultValues?: Partial<EntryFormValues>;
   categories?: AdminCategory[];
   isLoadingCategories?: boolean;
+  categoriesError?: unknown;
   templates?: EntryTemplate[];
   isLoadingTemplates?: boolean;
   contentBlockTypes?: ContentBlockType[];
@@ -144,6 +150,10 @@ export interface EntryFormProps {
   linkedAbbreviations?: (import('@/lib/api/abbreviations').EntryAbbreviation & { abbreviation: import('@/lib/api/abbreviations').Abbreviation })[];
   /** Called by AbbreviationsPanel after a link/unlink mutation so the parent can refetch. */
   onLinkChanged?: () => void;
+  /** Full AdminTag objects for all tags linked to this entry, used by TagsPanel for name resolution. */
+  linkedTags?: AdminTag[];
+  /** Called by TagsPanel after a successful API link/unlink so parent can refetch. */
+  onTagLinkChanged?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -161,6 +171,7 @@ function defaultLocaleTab(): LocaleTabState {
     shortDescription: '',
     seoTitle: '',
     seoDescription: '',
+    synonyms: [],
     blocks: [],
   };
 }
@@ -187,6 +198,7 @@ interface ComboboxOption {
   value: string;
   label: string;
   sublabel?: string;
+  isFallback?: boolean;
 }
 
 interface ComboboxFieldProps {
@@ -274,7 +286,10 @@ function ComboboxField({
                         value === opt.value ? 'opacity-100' : 'opacity-0',
                       )}
                     />
-                    <span className="flex-1 truncate">{opt.label}</span>
+                    <span className="flex-1 truncate flex items-center gap-0.5">
+                      {opt.label}
+                      {opt.isFallback && <MissingTranslationBadge />}
+                    </span>
                     {opt.sublabel && (
                       <span className="text-xs text-slate-400 font-mono shrink-0">{opt.sublabel}</span>
                     )}
@@ -736,6 +751,7 @@ export function EntryForm({
   defaultValues,
   categories,
   isLoadingCategories,
+  categoriesError,
   templates,
   isLoadingTemplates,
   contentBlockTypes,
@@ -751,10 +767,18 @@ export function EntryForm({
   entryOriginLanguage,
   linkedAbbreviations,
   onLinkChanged,
+  linkedTags,
+  onTagLinkChanged,
 }: EntryFormProps) {
-  const { allLocales, localeLabels, defaultLanguage } = useLanguages();
-  const activeLocales = allLocales.length > 0 ? allLocales : ['en'];
+  const { allLocales, defaultLanguage, getLocaleLabel } = useLanguages();
+  // Include store locales + any locales present in defaultValues (e.g. during tests
+  // or when pre-loaded data has locales not yet added to the store).
+  const defaultValueLocales = Object.keys(defaultValues?.locales ?? {});
+  const mergedLocales = Array.from(new Set([...allLocales, ...defaultValueLocales]));
+  const activeLocales = mergedLocales.length > 0 ? mergedLocales : ['en'];
   const defaultLocale = defaultLanguage?.locale ?? activeLocales[0] ?? 'en';
+
+  const [activeLocale, setActiveLocale] = useState<string>(defaultLocale);
 
   const [entryTemplateId, setEntryTemplateId] = useState(defaultValues?.entryTemplateId ?? '');
   // Once a template is saved on an entry it should not be swapped � lock the selector.
@@ -790,7 +814,6 @@ export function EntryForm({
     });
   }
   const [status, setStatus] = useState<EntryStatus>(defaultValues?.status ?? 'draft');
-  const [synonyms, setSynonyms] = useState<string[]>(defaultValues?.synonyms ?? []);
   const [tags, setTags] = useState<string[]>(defaultValues?.tags ?? []);
   const [abbreviations, setAbbreviations] = useState<LinkedAbbreviationState[]>(defaultValues?.abbreviations ?? []);
   const [locales, setLocales] = useState<Record<string, LocaleTabState>>(
@@ -826,6 +849,19 @@ export function EntryForm({
 
   const LOCALE_COMPLETENESS_MESSAGE = 'At least one language must have both a title and slug filled.';
 
+  const categoryOptions = useMemo(() => {
+    if (!categories) return [];
+    return categories.map((cat) => {
+      const { label, isFallback } = resolveTranslation(
+        cat.translations,
+        activeLocale,
+        (t) => t.name,
+        cat.id,
+      );
+      return { value: cat.id, label, isFallback };
+    });
+  }, [categories, activeLocale]);
+
   const allErrors = useMemo(() => {
     const localeErr = hasAtLeastOneCompleteLocale(enrichedLocales)
       ? []
@@ -844,7 +880,7 @@ export function EntryForm({
   }
 
   function buildValues(): EntryFormValues {
-    return { entryTemplateId, categoryId, status, synonyms, tags, abbreviations, locales: enrichedLocales };
+    return { entryTemplateId, categoryId, status, tags, abbreviations, locales: enrichedLocales };
   }
 
   function handleSave(e: React.MouseEvent) {
@@ -949,11 +985,14 @@ export function EntryForm({
       </div>
 
       {/* ── Two-column layout ─────────────────────────────────────────── */}
+      {allErrors.length > 0 && (
+        <ValidationSummary errors={allErrors} />
+      )}
       <div className="flex gap-5 items-start">
 
         {/* ── Left: language tabs ──────────────────────────────────── */}
         <div className="flex-1 min-w-0">
-          <Tabs defaultValue={defaultLocale}>
+          <Tabs value={activeLocale} onValueChange={setActiveLocale}>
             <TabsList variant="line" className="w-full justify-start">
               {activeLocales.map((locale) => {
                 const localeState = enrichedLocales[locale] ?? defaultLocaleTab();
@@ -967,7 +1006,7 @@ export function EntryForm({
                       )}
                       aria-hidden="true"
                     />
-                    {localeLabels[locale] ?? locale}
+                    {getLocaleLabel(locale)}
                   </TabsTrigger>
                 );
               })}
@@ -994,7 +1033,9 @@ export function EntryForm({
               <TabsList variant="line" className="w-full justify-start px-4 border-b border-slate-100 rounded-none bg-transparent h-auto">
                 <TabsTrigger variant="line" value="details" className="text-sm">Details</TabsTrigger>
                 <TabsTrigger variant="line" value="images" className="text-sm">Images</TabsTrigger>
-                <TabsTrigger variant="line" value="seo" className="text-sm">SEO</TabsTrigger>
+                <TabsTrigger variant="line" value="seo" className="text-sm">
+                  SEO <span className="font-mono text-xs text-slate-400 ml-1">{activeLocale.toUpperCase()}</span>
+                </TabsTrigger>
               </TabsList>
 
               {/* Details tab */}
@@ -1019,10 +1060,7 @@ export function EntryForm({
                   id="category-sidebar"
                   label="Category"
                   required
-                  options={(categories ?? []).map((cat) => {
-                    const en = cat.translations.find((t) => t.locale === 'en');
-                    return { value: cat.id, label: en?.name ?? cat.id };
-                  })}
+                  options={categoryOptions}
                   value={categoryId}
                   onChange={setCategoryId}
                   placeholder="Select category…"
@@ -1032,19 +1070,26 @@ export function EntryForm({
                   isLoading={isLoadingCategories}
                 />
 
+                {!isLoadingCategories && !!categoriesError && (
+                  <p role="alert" className="text-xs text-red-600">
+                    Categories could not be loaded. Please refresh and try again.
+                  </p>
+                )}
+
                 <ChipInput
                   label="Synonyms"
-                  chips={synonyms}
-                  onChange={setSynonyms}
+                  chips={enrichedLocales[activeLocale]?.synonyms ?? []}
+                  onChange={(chips) => handleLocaleChange(activeLocale, { synonyms: chips })}
                   placeholder="Add synonym…"
                   disabled={isSubmitting}
                 />
 
-                <ChipInput
-                  label="Tags"
-                  chips={tags}
-                  onChange={setTags}
-                  placeholder="Add tag…"
+                <TagsPanel
+                  entryId={entryId}
+                  linkedTags={linkedTags ?? []}
+                  activeLocale={activeLocale}
+                  onTagsChange={setTags}
+                  onLinkChanged={onTagLinkChanged}
                   disabled={isSubmitting}
                 />
 
@@ -1055,6 +1100,7 @@ export function EntryForm({
                     entryOriginLanguage={entryOriginLanguage ?? 'en'}
                     linkedAbbreviations={linkedAbbreviations ?? []}
                     onLinkChanged={onLinkChanged}
+                    activeLocale={activeLocale}
                   />
                 ) : (
                   <div className="rounded-md border border-dashed border-slate-200 p-3 text-xs text-slate-400">
@@ -1074,34 +1120,36 @@ export function EntryForm({
               {/* SEO tab */}
               <TabsContent value="seo" className="p-4 space-y-4 mt-0">
                 <div className="space-y-1.5">
-                  <Label htmlFor="seo-title-en" className="text-xs text-slate-500">SEO Title</Label>
+                  <Label htmlFor={`seo-title-${activeLocale}`} className="text-xs text-slate-500">SEO Title</Label>
                   <Input
-                    id="seo-title-en"
-                    value={enrichedLocales[defaultLocale]?.seoTitle ?? ''}
+                    id={`seo-title-${activeLocale}`}
+                    value={enrichedLocales[activeLocale]?.seoTitle ?? ''}
                     onChange={(e) =>
-                      handleLocaleChange(defaultLocale, { seoTitle: e.target.value.slice(0, SEO_TITLE_MAX) })
+                      handleLocaleChange(activeLocale, { seoTitle: e.target.value.slice(0, SEO_TITLE_MAX) })
                     }
+                    maxLength={SEO_TITLE_MAX}
                     placeholder="SEO title…"
                     disabled={isSubmitting}
                     className="text-sm"
                   />
-                  <p className="text-xs text-slate-400 text-right">{(enrichedLocales[defaultLocale]?.seoTitle ?? '').length}/{SEO_TITLE_MAX}</p>
+                  <p className="text-xs text-slate-400 text-right">{(enrichedLocales[activeLocale]?.seoTitle ?? '').length}/{SEO_TITLE_MAX}</p>
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="seo-desc-en" className="text-xs text-slate-500">SEO Description</Label>
+                  <Label htmlFor={`seo-desc-${activeLocale}`} className="text-xs text-slate-500">SEO Description</Label>
                   <Textarea
-                    id="seo-desc-en"
-                    value={enrichedLocales[defaultLocale]?.seoDescription ?? ''}
+                    id={`seo-desc-${activeLocale}`}
+                    value={enrichedLocales[activeLocale]?.seoDescription ?? ''}
                     onChange={(e) =>
-                      handleLocaleChange(defaultLocale, { seoDescription: e.target.value.slice(0, SEO_DESC_MAX) })
+                      handleLocaleChange(activeLocale, { seoDescription: e.target.value.slice(0, SEO_DESC_MAX) })
                     }
+                    maxLength={SEO_DESC_MAX}
                     placeholder="SEO description…"
                     disabled={isSubmitting}
                     rows={4}
                     className="text-sm resize-none"
                   />
-                  <p className="text-xs text-slate-400 text-right">{(enrichedLocales[defaultLocale]?.seoDescription ?? '').length}/{SEO_DESC_MAX}</p>
+                  <p className="text-xs text-slate-400 text-right">{(enrichedLocales[activeLocale]?.seoDescription ?? '').length}/{SEO_DESC_MAX}</p>
                 </div>
               </TabsContent>
             </Tabs>

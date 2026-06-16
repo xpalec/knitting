@@ -53,5 +53,5 @@ export function resolveTranslation(
   const en = translations.find((t) => t.locale === "en");
   if (en) return en;
 
-  return translations[0];
+  return translations[0] ?? null;
 }

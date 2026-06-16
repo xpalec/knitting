@@ -118,6 +118,7 @@ function entryLocaleState(title: string, slug: string): EntryLocaleTabState {
     shortDescription: '',
     seoTitle: '',
     seoDescription: '',
+    synonyms: [],
     blocks: [],
   };
 }

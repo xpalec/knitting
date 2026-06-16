@@ -31,6 +31,7 @@ import {
 import type { ArticleStatus, ArticleLocale } from '@/lib/api/articles';
 import { ARTICLE_SUPPORTED_LOCALES, ARTICLE_LOCALE_LABELS } from '@/lib/api/articles';
 import { hasAtLeastOneCompleteLocale, type ValidationRule } from '@/lib/validation';
+import { ValidationSummary } from '@/components/ui/validation-summary';
 import { useLanguages } from '@/hooks/useLanguages';
 
 // ---------------------------------------------------------------------------
@@ -559,8 +560,12 @@ export function ArticleEditorForm({
   title,
   validationRules,
 }: ArticleEditorFormProps) {
-  const { allLocales, localeLabels, defaultLanguage } = useLanguages();
-  const activeLocales = allLocales.length > 0 ? allLocales : ['en'];
+  const { allLocales, defaultLanguage, getLocaleLabel } = useLanguages();
+  // Include store locales + any locales present in defaultValues (e.g. during tests
+  // or when pre-loaded data has locales not yet added to the store).
+  const defaultValueLocales = Object.keys(defaultValues?.locales ?? {});
+  const mergedLocales = Array.from(new Set([...allLocales, ...defaultValueLocales]));
+  const activeLocales = mergedLocales.length > 0 ? mergedLocales : ['en'];
   const defaultLocale = defaultLanguage?.locale ?? activeLocales[0] ?? 'en';
 
   const [status, setStatus] = useState<ArticleStatus>(defaultValues?.status ?? 'draft');
@@ -699,6 +704,9 @@ export function ArticleEditorForm({
       </div>
 
       {/* Two-column layout */}
+      {allErrors.length > 0 && (
+        <ValidationSummary errors={allErrors} />
+      )}
       <div className="flex gap-5 items-start">
 
         {/* Left: language tabs */}
@@ -717,7 +725,7 @@ export function ArticleEditorForm({
                       )}
                       aria-hidden="true"
                     />
-                    {localeLabels[locale] ?? locale}
+                    {getLocaleLabel(locale)}
                   </TabsTrigger>
                 );
               })}
@@ -792,8 +800,10 @@ export function ArticleEditorForm({
                 <Tabs defaultValue={defaultLocale}>
                   <TabsList variant="line" className="w-full justify-start mb-4">
                     {activeLocales.map((locale) => (
-                      <TabsTrigger key={locale} value={locale} variant="line" className="text-xs">
-                        {localeLabels[locale] ?? locale}
+                      <TabsTrigger key={locale} value={locale} variant="line" className="text-xs"
+                        aria-label={`SEO - ${getLocaleLabel(locale)}`}
+                      >
+                        {locale.toUpperCase()}
                       </TabsTrigger>
                     ))}
                   </TabsList>

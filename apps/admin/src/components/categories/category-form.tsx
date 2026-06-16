@@ -333,9 +333,13 @@ export function CategoryForm({
   onDelete,
   title,
 }: CategoryFormProps) {
-  const { allLocales, localeLabels, defaultLanguage } = useLanguages();
+  const { allLocales, defaultLanguage, getLocaleLabel } = useLanguages();
 
-  const activeLocales = allLocales.length > 0 ? allLocales : ['en'];
+  // Include store locales + any locales present in defaultValues (e.g. during tests
+  // or when pre-loaded data has locales not yet added to the store).
+  const defaultValueLocales = Object.keys(defaultValues?.locales ?? {});
+  const mergedLocales = Array.from(new Set([...allLocales, ...defaultValueLocales]));
+  const activeLocales = mergedLocales.length > 0 ? mergedLocales : ['en'];
   const defaultLocale = defaultLanguage?.locale ?? activeLocales[0] ?? 'en';
 
   const [type, setType] = useState<CategoryType | ''>(defaultValues?.type ?? '');
@@ -500,7 +504,7 @@ export function CategoryForm({
                       )}
                       aria-hidden="true"
                     />
-                    <span>{localeLabels[locale] ?? locale}</span>
+                    <span>{getLocaleLabel(locale)}</span>
                   </TabsTrigger>
                 );
               })}

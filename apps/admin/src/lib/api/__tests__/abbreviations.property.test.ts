@@ -72,15 +72,19 @@ describe("rankAbbreviations — Property 1: rankAbbreviations preserves the rank
 
           // Tier ordering invariant: tier of element[i] <= tier of element[i+1]
           for (let i = 0; i < result.length - 1; i++) {
-            expect(tierOf(result[i].code)).toBeLessThanOrEqual(tierOf(result[i + 1].code));
+            const curr = result[i]!;
+            const next = result[i + 1]!;
+            expect(tierOf(curr.code)).toBeLessThanOrEqual(tierOf(next.code));
           }
 
           // Alphabetical within tier: same-tier consecutive pairs must be in order
           // Use localeCompare to match the implementation's sort comparator
           for (let i = 0; i < result.length - 1; i++) {
-            if (tierOf(result[i].code) === tierOf(result[i + 1].code)) {
+            const curr = result[i]!;
+            const next = result[i + 1]!;
+            if (tierOf(curr.code) === tierOf(next.code)) {
               expect(
-                result[i].code.toLowerCase().localeCompare(result[i + 1].code.toLowerCase()),
+                curr.code.toLowerCase().localeCompare(next.code.toLowerCase()),
               ).toBeLessThanOrEqual(0);
             }
           }

@@ -12,6 +12,7 @@ import type { Entry, EntryStatus } from '@/lib/api/entries';
 import { entryTemplatesApi } from '@/lib/api/entry-templates';
 import { contentBlockTypesApi } from '@/lib/api/content-block-types';
 import { ApiError } from '@/lib/api/client';
+import type { AdminTag } from '@/lib/api/tags';
 import { useAuthStore } from '@/store/auth';
 
 import { Button } from '@/components/ui/button';
@@ -71,9 +72,10 @@ function mapEntryToFormValues(entry: Entry): EntryFormValues {
       title: t?.term ?? '',
       slug: t?.slug ?? '',
       slugManuallyEdited: Boolean(t?.slug),
-      shortDescription: (t?.metadata as Record<string, unknown> | undefined)?.definition_short as string ?? '',
-      seoTitle: '',
-      seoDescription: '',
+      shortDescription: (t?.metadata as Record<string, unknown>)?.definition_short as string ?? '',
+      seoTitle: (t?.metadata as Record<string, unknown>)?.seo_title as string ?? '',
+      seoDescription: (t?.metadata as Record<string, unknown>)?.seo_description as string ?? '',
+      synonyms: ((t?.metadata as Record<string, unknown>)?.synonyms as string[] | undefined) ?? [],
       blocks,
     };
   }
@@ -82,8 +84,7 @@ function mapEntryToFormValues(entry: Entry): EntryFormValues {
     entryTemplateId: entry.entry_template_id ?? '',
     categoryId: entry.category_id ?? '',
     status: entry.status as EntryStatus,
-    synonyms: [],
-    tags: (entry.tags ?? []).map((tag) => tag.name),
+    tags: (entry.tags ?? []).map((tag) => tag.id),
     abbreviations: [],
     locales,
   };
@@ -114,7 +115,7 @@ export default function EntryEditPage({ params }: { params: Promise<{ id: string
   });
 
   // Fetch categories
-  const { data: categoriesData, isLoading: isLoadingCategories } = useQuery({
+  const { data: categoriesData, isLoading: isLoadingCategories, error: categoriesError } = useQuery({
     queryKey: ['categories-entry'],
     queryFn: () => listEntryCategories(),
   });
@@ -159,7 +160,31 @@ export default function EntryEditPage({ params }: { params: Promise<{ id: string
         await entriesApi.updateEntryStatus(id, values.status as EntryStatus);
       }
 
-      // 3. Upsert translations for each locale that has a title
+      // 3. Tag reconciliation — compute set difference between server tags and submitted tags
+      // (Requirements 8.3, 8.5)
+      const serverTagIds = new Set((entry?.tags ?? []).map((t) => t.id));
+      const submittedTagIds = new Set(values.tags);
+      const toAdd = [...submittedTagIds].filter((tagId) => !serverTagIds.has(tagId));
+      const toRemove = [...serverTagIds].filter((tagId) => !submittedTagIds.has(tagId));
+
+      const api = entriesApi as Record<string, unknown>;
+      if (typeof api.linkTag === 'function' && typeof api.unlinkTag === 'function') {
+        try {
+          await Promise.all([
+            ...toAdd.map((tagId) => (api.linkTag as (entryId: string, tagId: string) => Promise<unknown>)(id, tagId)),
+            ...toRemove.map((tagId) => (api.unlinkTag as (entryId: string, tagId: string) => Promise<unknown>)(id, tagId)),
+          ]);
+        } catch (tagError) {
+          // Surface tag link/unlink errors as toast without resetting form state (Requirement 8.4)
+          toast.error('Failed to update tag links. Other changes were saved.');
+          console.error('[EntryForm] Tag reconciliation error:', tagError);
+        }
+      } else {
+        console.warn('[EntryForm] entriesApi.linkTag / unlinkTag not available; skipping tag reconciliation.');
+      }
+
+      // 4. Upsert translations for each locale that has a title
+      // Include synonyms, seo_title, and seo_description in the payload (Requirements 4.5, 6.7)
       const locales = Object.keys(values.locales) as string[];
       await Promise.all(
         locales
@@ -171,6 +196,10 @@ export default function EntryEditPage({ params }: { params: Promise<{ id: string
             for (const b of ls.blocks) {
               blocks[b.blockId] = { content: b.content ?? undefined };
             }
+
+            const seoTitleTrimmed = ls.seoTitle.trim();
+            const seoDescriptionTrimmed = ls.seoDescription.trim();
+
             return entriesApi.updateTranslation(id, locale, {
               term: ls.title.trim(),
               slug: ls.slug.trim() || undefined,
@@ -178,6 +207,14 @@ export default function EntryEditPage({ params }: { params: Promise<{ id: string
                 ? { definition_short: ls.shortDescription.trim() }
                 : undefined,
               blocks: Object.keys(blocks).length > 0 ? blocks : undefined,
+              // Always include synonyms, even if empty array (clears previously saved synonyms)
+              synonyms: ls.synonyms,
+              // Include seo_title only when non-empty (Requirement 6.7)
+              seo_title: seoTitleTrimmed || undefined,
+              // Include seo_description only when both seo_title and seo_description are non-empty
+              seo_description: seoTitleTrimmed && seoDescriptionTrimmed
+                ? seoDescriptionTrimmed
+                : undefined,
             });
           }),
       );
@@ -252,6 +289,7 @@ export default function EntryEditPage({ params }: { params: Promise<{ id: string
           defaultValues={mapEntryToFormValues(entry)}
           categories={categoriesData?.data}
           isLoadingCategories={isLoadingCategories}
+          categoriesError={categoriesError}
           templates={templates}
           isLoadingTemplates={isLoadingTemplates}
           contentBlockTypes={contentBlockTypes}
@@ -266,6 +304,12 @@ export default function EntryEditPage({ params }: { params: Promise<{ id: string
           entryOriginLanguage={entry.origin_language}
           linkedAbbreviations={entry.entry_abbreviations ?? []}
           onLinkChanged={() => queryClient.invalidateQueries({ queryKey: ['entry', id] })}
+          linkedTags={(entry.tags ?? []).map((tag): AdminTag => ({
+            id: tag.id,
+            translations: [{ locale: 'en', name: tag.name, slug: '', seo_title: null, seo_description: null, status: 'draft' }],
+            entry_count: 0,
+          }))}
+          onTagLinkChanged={() => queryClient.invalidateQueries({ queryKey: ['entry', id] })}
         />
       </div>
 

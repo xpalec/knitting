@@ -24,7 +24,7 @@ export default function NewEntryPage() {
   }, [currentUser, router]);
 
   // Fetch categories
-  const { data: categoriesData, isLoading: isLoadingCategories } = useQuery({
+  const { data: categoriesData, isLoading: isLoadingCategories, error: categoriesError } = useQuery({
     queryKey: ['categories-entry'],
     queryFn: () => listEntryCategories(),
   });
@@ -73,6 +73,7 @@ export default function NewEntryPage() {
       <EntryForm
         categories={categoriesData?.data}
         isLoadingCategories={isLoadingCategories}
+        categoriesError={categoriesError}
         templates={templates}
         isLoadingTemplates={isLoadingTemplates}
         contentBlockTypes={contentBlockTypes}

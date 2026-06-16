@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/command';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { LanguageBadges } from '@/components/ui/language-badges';
+import { MissingTranslationBadge } from '@/components/ui/missing-translation-badge';
 import { AbbreviationCreateDialog } from '@/components/abbreviations/abbreviation-create-dialog';
 import { AbbreviationEditDialog } from '@/components/abbreviations/abbreviation-edit-dialog';
 
@@ -44,6 +45,27 @@ export interface AbbreviationsPanelProps {
   entryOriginLanguage: string;
   linkedAbbreviations: (EntryAbbreviation & { abbreviation: Abbreviation })[];
   onLinkChanged?: () => void;
+  /** The active locale code, used for locale-aware label resolution. */
+  activeLocale: string;
+}
+
+// ---------------------------------------------------------------------------
+// Label resolution helper
+// ---------------------------------------------------------------------------
+
+function resolveAbbreviationLabel(
+  abbreviation: Abbreviation,
+  activeLocale: string,
+): { label: string; isFallback: boolean } {
+  const translations = abbreviation.translations ?? [];
+  // Try active locale short_meaning
+  const activeTr = translations.find((t) => t.locale === activeLocale);
+  if (activeTr && activeTr.short_meaning) return { label: activeTr.short_meaning, isFallback: false };
+  // Fall back to source_language translation
+  const sourceTr = translations.find((t) => t.locale === abbreviation.source_language);
+  if (sourceTr && sourceTr.short_meaning) return { label: sourceTr.short_meaning, isFallback: true };
+  // Last resort: abbreviation code
+  return { label: abbreviation.code, isFallback: true };
 }
 
 // ---------------------------------------------------------------------------
@@ -55,6 +77,7 @@ export function AbbreviationsPanel({
   entryOriginLanguage,
   linkedAbbreviations,
   onLinkChanged,
+  activeLocale,
 }: AbbreviationsPanelProps) {
   // ── Dialog state ──────────────────────────────────────────────────────────
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -172,6 +195,7 @@ export function AbbreviationsPanel({
               <AbbreviationCard
                 key={linked.abbreviation_id}
                 linked={linked}
+                activeLocale={activeLocale}
                 onEdit={() => setEditTarget(linked.abbreviation)}
                 onRemove={() => setRemoveTarget(linked)}
               />
@@ -257,18 +281,24 @@ export function AbbreviationsPanel({
 
 interface AbbreviationCardProps {
   linked: EntryAbbreviation & { abbreviation: Abbreviation };
+  activeLocale: string;
   onEdit: () => void;
   onRemove: () => void;
 }
 
-function AbbreviationCard({ linked, onEdit, onRemove }: AbbreviationCardProps) {
+function AbbreviationCard({ linked, activeLocale, onEdit, onRemove }: AbbreviationCardProps) {
   const { abbreviation, is_primary, sort_order } = linked;
+  const { label, isFallback } = resolveAbbreviationLabel(abbreviation, activeLocale);
 
   return (
     <li className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 shadow-xs">
-      {/* Code */}
-      <span className="font-mono text-sm font-medium text-slate-800 flex-1 truncate">
+      {/* Code / resolved label */}
+      <span className="font-mono text-sm font-medium text-slate-800 flex-1 truncate flex items-center gap-1">
         {abbreviation.code}
+        {label !== abbreviation.code && (
+          <span className="text-slate-500 font-sans font-normal truncate">{label}</span>
+        )}
+        {isFallback && <MissingTranslationBadge />}
       </span>
 
       {/* Source language badge */}

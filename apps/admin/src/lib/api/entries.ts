@@ -100,6 +100,9 @@ export interface UpdateTranslationPayload {
   blocks?: Record<string, { content?: unknown }>;
   status?: "draft" | "reviewed" | "published";
   translator_note?: string;
+  synonyms?: string[];
+  seo_title?: string;
+  seo_description?: string;
 }
 
 export function listEntryCategories(): Promise<ApiResponse<AdminCategory[]>> {
