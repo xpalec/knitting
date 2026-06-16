@@ -38,20 +38,15 @@ interface NavItem {
 
 const NAV_SECTIONS: Array<{ label: string; items: NavItem[] }> = [
   {
-    label: 'ENCYCLOPEDIA',
+    label: 'CONTENT',
     items: [
       { label: 'Entries', href: '/entries', icon: BookOpen },
       { label: 'Entry templates', href: '/entry-templates', icon: Layers, adminOnly: true },
       { label: 'Abbreviations', href: '/abbreviations', icon: CaseSensitive },
-      { label: 'Categories', href: '/categories', icon: Tag },
-      { label: 'Tags', href: '/tags', icon: Tags },
-    ],
-  },
-  {
-    label: 'CONTENT',
-    items: [
       { label: 'Articles', href: '/articles', icon: FileText },
       { label: 'Video', href: '/video', icon: Video },
+      { label: 'Categories', href: '/categories', icon: Tag },
+      { label: 'Tags', href: '/tags', icon: Tags },
     ],
   },
   {

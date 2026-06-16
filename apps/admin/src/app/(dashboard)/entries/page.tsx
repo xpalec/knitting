@@ -465,29 +465,36 @@ export default function EntriesPage() {
   }
 
   // Bulk delete handler
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+
   async function handleBulkDelete() {
     // Capture IDs before any state changes
     const ids = [...selectedIds];
     setBulkDeleteOpen(false);
+    setIsBulkDeleting(true);
 
-    const results = await Promise.allSettled(
-      ids.map((id) => entriesApi.deleteEntry(id))
-    );
-    const succeeded = results.filter((r) => r.status === 'fulfilled').length;
-    const failed = results.filter((r) => r.status === 'rejected').length;
-    const failedIds = ids.filter((_, i) => results[i]?.status === 'rejected');
+    try {
+      const results = await Promise.allSettled(
+        ids.map((id) => entriesApi.deleteEntry(id))
+      );
+      const succeeded = results.filter((r) => r.status === 'fulfilled').length;
+      const failed = results.filter((r) => r.status === 'rejected').length;
+      const failedIds = ids.filter((_, i) => results[i]?.status === 'rejected');
 
-    if (succeeded > 0) {
-      toast.success(`${succeeded} entr${succeeded === 1 ? 'y' : 'ies'} deleted`);
+      if (succeeded > 0) {
+        toast.success(`${succeeded} entr${succeeded === 1 ? 'y' : 'ies'} deleted`);
+      }
+      if (failed > 0) {
+        toast.error(`${failed} entr${failed === 1 ? 'y' : 'ies'} could not be deleted`);
+      }
+
+      setSelectedIds(failed === 0 ? new Set() : new Set(failedIds));
+
+      queryClient.invalidateQueries({ queryKey: ['entries'] });
+      queryClient.invalidateQueries({ queryKey: ['entries-summary'] });
+    } finally {
+      setIsBulkDeleting(false);
     }
-    if (failed > 0) {
-      toast.error(`${failed} entr${failed === 1 ? 'y' : 'ies'} could not be deleted`);
-    }
-
-    setSelectedIds(failed === 0 ? new Set() : new Set(failedIds));
-
-    await queryClient.invalidateQueries({ queryKey: ['entries'] });
-    await queryClient.invalidateQueries({ queryKey: ['entries-summary'] });
   }
 
   return (
@@ -930,8 +937,12 @@ export default function EntriesPage() {
         open={deleteTarget !== null}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
         title="Delete Entry"
-        description={`Are you sure you want to delete "${deleteTarget ? (deleteTarget.term ?? '-') : ''}"? This action cannot be undone.`}
-        confirmLabel="Delete"
+        description={
+          deleteTarget?.status === 'deprecated'
+            ? `"${deleteTarget.term ?? '-'}" is deprecated and will be permanently deleted. This action cannot be undone.`
+            : `Are you sure you want to delete "${deleteTarget ? (deleteTarget.term ?? '-') : ''}"? This action cannot be undone.`
+        }
+        confirmLabel={deleteTarget?.status === 'deprecated' ? 'Delete permanently' : 'Delete'}
         loadingLabel="Deleting..."
         onConfirm={() => {
           if (deleteTarget) deleteMutation.mutate(deleteTarget.id);
@@ -948,7 +959,7 @@ export default function EntriesPage() {
         confirmLabel="Delete"
         loadingLabel="Deleting..."
         onConfirm={handleBulkDelete}
-        loading={false}
+        loading={isBulkDeleting}
       />
 
       {/* Change status dialog */}

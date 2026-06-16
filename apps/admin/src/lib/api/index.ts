@@ -9,3 +9,4 @@ export * from './templates';
 export * from './categories';
 export * from './tags';
 export * from './dashboard';
+export * from './abbreviations';

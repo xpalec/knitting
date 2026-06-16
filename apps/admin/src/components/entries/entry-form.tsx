@@ -34,6 +34,7 @@ import type { EntryStatus } from '@/lib/api/entries';
 import type { AdminCategory } from '@/lib/api/categories';
 import type { EntryTemplate } from '@/lib/api/entry-templates';
 import type { ContentBlockType } from '@/lib/api/content-block-types';
+import type { Abbreviation } from '@/lib/api/abbreviations';
 import { hasAtLeastOneCompleteLocale, type ValidationRule } from '@/lib/validation';
 import {
   Tooltip,
@@ -42,6 +43,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { useLanguages } from '@/hooks/useLanguages';
+import { AbbreviationsPanel } from '@/components/abbreviations/abbreviations-panel';
 
 // ---------------------------------------------------------------------------
 // Constants (kept for backward compatibility — dynamic list comes from store)
@@ -94,13 +96,28 @@ export interface LocaleTabState {
   blocks: BlockEditorState[];
 }
 
+/**
+ * Represents a linked abbreviation in the entry form.
+ * Managed directly by AbbreviationsPanel via API mutations;
+ * the entry form submit does NOT batch abbreviation changes.
+ */
+export interface LinkedAbbreviationState {
+  abbreviation_id: string;
+  code: string;             // denormalized for display
+  source_language: string;  // denormalized for display
+  is_primary: boolean;
+  sort_order: number;
+  // populated from the API when editing an existing entry
+  abbreviation?: Abbreviation;
+}
+
 export interface EntryFormValues {
   entryTemplateId: string;
   categoryId: string;
   status: EntryStatus;
   synonyms: string[];
   tags: string[];
-  abbreviations: string[];
+  abbreviations: LinkedAbbreviationState[];
   locales: Record<string, LocaleTabState>;
 }
 
@@ -119,6 +136,14 @@ export interface EntryFormProps {
   onDelete?: () => void;
   title?: string;
   validationRules?: ValidationRule<EntryFormValues>[];
+  /** The id of the entry being edited. Undefined for new (unsaved) entries. */
+  entryId?: string;
+  /** The origin language of the entry, used by AbbreviationsPanel for source-language filtering. */
+  entryOriginLanguage?: string;
+  /** The abbreviations currently linked to this entry, from the entry's GET response. */
+  linkedAbbreviations?: (import('@/lib/api/abbreviations').EntryAbbreviation & { abbreviation: import('@/lib/api/abbreviations').Abbreviation })[];
+  /** Called by AbbreviationsPanel after a link/unlink mutation so the parent can refetch. */
+  onLinkChanged?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -722,12 +747,18 @@ export function EntryForm({
   onDelete,
   title,
   validationRules,
+  entryId,
+  entryOriginLanguage,
+  linkedAbbreviations,
+  onLinkChanged,
 }: EntryFormProps) {
   const { allLocales, localeLabels, defaultLanguage } = useLanguages();
   const activeLocales = allLocales.length > 0 ? allLocales : ['en'];
   const defaultLocale = defaultLanguage?.locale ?? activeLocales[0] ?? 'en';
 
   const [entryTemplateId, setEntryTemplateId] = useState(defaultValues?.entryTemplateId ?? '');
+  // Once a template is saved on an entry it should not be swapped � lock the selector.
+  const isTemplateFixed = Boolean(defaultValues?.entryTemplateId);
   const [categoryId, setCategoryId] = useState(defaultValues?.categoryId ?? '');
 
   function handleTemplateChange(id: string) {
@@ -761,16 +792,35 @@ export function EntryForm({
   const [status, setStatus] = useState<EntryStatus>(defaultValues?.status ?? 'draft');
   const [synonyms, setSynonyms] = useState<string[]>(defaultValues?.synonyms ?? []);
   const [tags, setTags] = useState<string[]>(defaultValues?.tags ?? []);
-  const [abbreviations, setAbbreviations] = useState<string[]>(defaultValues?.abbreviations ?? []);
+  const [abbreviations, setAbbreviations] = useState<LinkedAbbreviationState[]>(defaultValues?.abbreviations ?? []);
   const [locales, setLocales] = useState<Record<string, LocaleTabState>>(
     () => buildDefaultLocales(activeLocales, defaultValues),
   );
 
-  // Ensure any newly added languages get a default state entry
+  // Ensure any newly added languages get a default state entry, populated with
+  // the currently selected template's blocks (so new locales aren't empty).
   const enrichedLocales = { ...locales };
   for (const locale of activeLocales) {
     if (!enrichedLocales[locale]) {
-      enrichedLocales[locale] = defaultLocaleTab();
+      const selectedTemplate = templates?.find((t) => t.id === entryTemplateId);
+      const templateBlocks: BlockEditorState[] = selectedTemplate
+        ? selectedTemplate.blocks
+            .slice()
+            .sort((a, b) => a.order - b.order)
+            .map((b, i) => ({
+              _id: nextId(),
+              blockId: b.id,
+              type: b.type,
+              label: b.label ?? b.type,
+              heading: selectedTemplate.translations?.[b.id]?.[locale]?.heading ?? '',
+              headingManuallyEdited: false,
+              content: null,
+              visible: true,
+              required: b.required,
+              order: i + 1,
+            }))
+        : [];
+      enrichedLocales[locale] = { ...defaultLocaleTab(), blocks: templateBlocks };
     }
   }
 
@@ -960,7 +1010,7 @@ export function EntryForm({
                   placeholder="Select template…"
                   searchPlaceholder="Search templates…"
                   emptyMessage="No templates found."
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || isTemplateFixed}
                   isLoading={isLoadingTemplates}
                 />
 
@@ -998,13 +1048,19 @@ export function EntryForm({
                   disabled={isSubmitting}
                 />
 
-                <ChipInput
-                  label="Abbreviations"
-                  chips={abbreviations}
-                  onChange={setAbbreviations}
-                  placeholder="Add abbreviation…"
-                  disabled={isSubmitting}
-                />
+                {/* Abbreviations panel — only rendered for existing (saved) entries */}
+                {entryId ? (
+                  <AbbreviationsPanel
+                    entryId={entryId}
+                    entryOriginLanguage={entryOriginLanguage ?? 'en'}
+                    linkedAbbreviations={linkedAbbreviations ?? []}
+                    onLinkChanged={onLinkChanged}
+                  />
+                ) : (
+                  <div className="rounded-md border border-dashed border-slate-200 p-3 text-xs text-slate-400">
+                    Abbreviations can be linked after the entry is saved.
+                  </div>
+                )}
               </TabsContent>
 
               {/* Images tab */}

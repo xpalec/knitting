@@ -90,8 +90,8 @@ export class AdminEntryController {
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: 'Soft-delete: sets Entry.status = deprecated' })
-  softDelete(@Param('id') id: string) {
-    return this.adminEntryService.softDelete(id);
+  @ApiOperation({ summary: 'Permanently delete an entry and all its translations' })
+  hardDelete(@Param('id') id: string) {
+    return this.adminEntryService.hardDelete(id);
   }
 }

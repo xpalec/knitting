@@ -262,6 +262,10 @@ export default function EntryEditPage({ params }: { params: Promise<{ id: string
           onCancel={() => router.push('/entries')}
           onDelete={() => setDeleteDialogOpen(true)}
           title={entry.translations?.find((t) => t.locale === 'en')?.term ?? entry.term ?? 'Edit entry'}
+          entryId={id}
+          entryOriginLanguage={entry.origin_language}
+          linkedAbbreviations={entry.entry_abbreviations ?? []}
+          onLinkChanged={() => queryClient.invalidateQueries({ queryKey: ['entry', id] })}
         />
       </div>
 
@@ -269,8 +273,12 @@ export default function EntryEditPage({ params }: { params: Promise<{ id: string
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
         title="Delete Entry"
-        description={`Are you sure you want to delete this entry? This action cannot be undone.`}
-        confirmLabel="Delete"
+        description={
+          entry.status === 'deprecated'
+            ? 'This entry is deprecated and will be permanently deleted. This action cannot be undone.'
+            : 'Are you sure you want to delete this entry? This action cannot be undone.'
+        }
+        confirmLabel={entry.status === 'deprecated' ? 'Delete permanently' : 'Delete'}
         onConfirm={() => deleteMutation.mutate()}
         loading={deleteMutation.isPending}
       />

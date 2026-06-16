@@ -2,6 +2,7 @@ import { apiGet, apiGetWithMeta, apiPost, apiPut, apiPatch, apiDelete } from "./
 import type { ApiResponse } from "./client";
 import { adminCategoriesApi } from "./categories";
 import type { AdminCategory } from "./categories";
+import type { EntryAbbreviation, Abbreviation } from "./abbreviations";
 
 export type EntryStatus = "draft" | "review" | "published" | "deprecated";
 export type SkillLevel = "beginner" | "intermediate" | "advanced" | "expert";
@@ -54,6 +55,8 @@ export interface Entry {
   // Present on single-entry responses
   translations: Translation[];
   content_blocks: ContentBlock[];
+  // Present on single-entry responses when the backend includes abbreviation links
+  entry_abbreviations?: (EntryAbbreviation & { abbreviation: Abbreviation })[];
   created_at: string;
   updated_at: string;
 }

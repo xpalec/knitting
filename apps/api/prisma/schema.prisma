@@ -106,6 +106,7 @@ model Entry {
   related_to        RelatedEntry[]  @relation("RelatedTo")
   contributions     Contribution[]
   learning_path_entries LearningPathEntry[]
+  abbreviations     EntryAbbreviation[]
 
   @@index([origin_language])
   @@index([entry_template_id])
@@ -591,4 +592,75 @@ model User {
   created_at    DateTime @default(now()) @db.Timestamptz
 
   @@map("user")
+}
+
+// ---------------------------------------------------------------------------
+// Abbreviation
+// Knitting abbreviations (e.g. K2tog, yo) with source language.
+// Case-insensitive uniqueness on (code, source_language) enforced via
+// expression index in migration (see migration: add-abbreviation-models).
+// ---------------------------------------------------------------------------
+
+model Abbreviation {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// The abbreviation as it appears in patterns, e.g. "K2tog", "yo"
+  code            String   @db.VarChar(255)
+  /// BCP-47 locale of the knitting tradition this abbreviation originates from
+  source_language String
+  created_at      DateTime @default(now()) @db.Timestamptz
+  updated_at      DateTime @updatedAt @db.Timestamptz
+
+  translations        AbbreviationTranslation[]
+  entry_abbreviations EntryAbbreviation[]
+
+  /// Case-insensitive uniqueness enforced via expression index (see migration)
+  @@index([source_language])
+  @@map("abbreviation")
+}
+
+// ---------------------------------------------------------------------------
+// AbbreviationTranslation
+// Locale-specific meaning and description for one Abbreviation.
+// One row per locale per abbreviation.
+// ---------------------------------------------------------------------------
+
+model AbbreviationTranslation {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  abbreviation_id String   @db.Uuid
+  /// BCP-47 locale code: en, pl, de, no, fr
+  locale          String
+  /// Plain-text short meaning, e.g. "knit 2 together" (max 500 chars)
+  short_meaning   String?  @db.VarChar(500)
+  /// Tiptap JSON describing the abbreviation in detail
+  description     Json?
+  created_at      DateTime @default(now()) @db.Timestamptz
+  updated_at      DateTime @updatedAt @db.Timestamptz
+
+  abbreviation Abbreviation @relation(fields: [abbreviation_id], references: [id], onDelete: Cascade)
+
+  @@unique([abbreviation_id, locale])
+  @@index([locale])
+  @@map("abbreviation_translation")
+}
+
+// ---------------------------------------------------------------------------
+// EntryAbbreviation
+// Join table linking Abbreviation to Entry with metadata.
+// Composite PK (entry_id, abbreviation_id).
+// ---------------------------------------------------------------------------
+
+model EntryAbbreviation {
+  entry_id        String  @db.Uuid
+  abbreviation_id String  @db.Uuid
+  /// Whether this is the primary abbreviation for this entry
+  is_primary      Boolean @default(false)
+  /// Display order within the entry's abbreviation list (0–9999)
+  sort_order      Int     @default(0)
+
+  entry        Entry        @relation(fields: [entry_id], references: [id], onDelete: Cascade)
+  abbreviation Abbreviation @relation(fields: [abbreviation_id], references: [id], onDelete: Cascade)
+
+  @@id([entry_id, abbreviation_id])
+  @@index([entry_id])
+  @@map("entry_abbreviation")
 }

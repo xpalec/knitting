@@ -199,10 +199,15 @@ export class AdminEntryService {
             },
           },
         },
+        abbreviations: {
+          include: { abbreviation: { include: { translations: true } } },
+          orderBy: { sort_order: 'asc' },
+        },
       },
     });
     if (!entry) throw new NotFoundException(`Entry ${id} not found`);
-    return { data: entry };
+    const { abbreviations, ...rest } = entry;
+    return { data: { ...rest, entry_abbreviations: abbreviations } };
   }
 
   async update(id: string, dto: UpdateEntryDto) {
@@ -318,6 +323,13 @@ export class AdminEntryService {
     });
     await this.invalidateCacheForEntry(id);
     return { data: entry };
+  }
+
+  async hardDelete(id: string) {
+    await this.assertExists(id);
+    await this.invalidateCacheForEntry(id);
+    await this.prisma.entry.delete({ where: { id } });
+    return { data: { id } };
   }
 
   private async assertExists(id: string): Promise<void> {
