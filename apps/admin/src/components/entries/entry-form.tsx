@@ -1074,18 +1074,18 @@ export function EntryForm({
 
         {/* ── Right: sidebar ────────────────────────────────────────── */}
         <div className="w-[480px] shrink-0">
-          <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
-            <Tabs defaultValue="details">
-              <TabsList variant="line" className="w-full justify-start px-4 border-b border-slate-100 rounded-none bg-transparent h-auto">
-                <TabsTrigger variant="line" value="details" className="text-sm">Details</TabsTrigger>
-                <TabsTrigger variant="line" value="images" className="text-sm">Images</TabsTrigger>
-                <TabsTrigger variant="line" value="seo" className="text-sm">
-                  SEO <span className="font-mono text-xs text-slate-400 ml-1">{activeLocale.toUpperCase()}</span>
-                </TabsTrigger>
-              </TabsList>
+          <Tabs defaultValue="details">
+            <TabsList variant="line" className="w-full justify-start">
+              <TabsTrigger variant="line" value="details">Details</TabsTrigger>
+              <TabsTrigger variant="line" value="images">Images</TabsTrigger>
+              <TabsTrigger variant="line" value="seo">
+                SEO <span className="font-mono text-xs text-slate-400 ml-1">{activeLocale.toUpperCase()}</span>
+              </TabsTrigger>
+            </TabsList>
 
-              {/* Details tab */}
-              <TabsContent value="details" className="p-4 space-y-4 mt-0">
+            {/* Details tab */}
+            <TabsContent value="details" className="mt-2 pt-4">
+              <div className="rounded-lg border border-slate-200 bg-white p-4 space-y-4">
                 {/* Entry template */}
                 <ComboboxField
                   id="entry-template-sidebar"
@@ -1131,18 +1131,22 @@ export function EntryForm({
                   onLinkChanged={onTagLinkChanged}
                   disabled={isSubmitting}
                 />
-              </TabsContent>
+              </div>
+            </TabsContent>
 
-              {/* Images tab */}
-              <TabsContent value="images" className="p-4 mt-0">
+            {/* Images tab */}
+            <TabsContent value="images" className="mt-0 pt-4">
+              <div className="rounded-lg border border-slate-200 bg-white p-4">
                 <div className="flex flex-col items-center justify-center py-10 text-slate-400 gap-2">
                   <Upload size={28} aria-hidden="true" />
                   <p className="text-sm">Images coming soon</p>
                 </div>
-              </TabsContent>
+              </div>
+            </TabsContent>
 
-              {/* SEO tab */}
-              <TabsContent value="seo" className="p-4 space-y-4 mt-0">
+            {/* SEO tab */}
+            <TabsContent value="seo" className="mt-0 pt-4">
+              <div className="rounded-lg border border-slate-200 bg-white p-4 space-y-4">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">
                     {activeLocale.toUpperCase()}
@@ -1196,9 +1200,9 @@ export function EntryForm({
                   />
                   <p className="text-xs text-slate-400 text-right">{(enrichedLocales[activeLocale]?.seoDescription ?? '').length}/{SEO_DESC_MAX}</p>
                 </div>
-              </TabsContent>
-            </Tabs>
-          </div>
+              </div>
+            </TabsContent>
+          </Tabs>
         </div>
       </div>
     </form>

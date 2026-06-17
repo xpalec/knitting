@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Save, X } from 'lucide-react';
@@ -33,6 +33,8 @@ export interface TagCreateDialogProps {
   onCreated?: (tag: AdminTag) => void;
   /** Query key to invalidate on success. */
   queryKey?: unknown[];
+  /** Pre-fill the English name field when opening the dialog. */
+  initialName?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -62,18 +64,39 @@ export function TagCreateDialog({
   onOpenChange,
   onCreated,
   queryKey,
+  initialName,
 }: TagCreateDialogProps) {
   const queryClient = useQueryClient();
   const { allLocales, defaultLanguage, getLocaleLabel } = useLanguages();
   const activeLocales = allLocales.length > 0 ? allLocales : ['en'];
   const defaultLocale = defaultLanguage?.locale ?? activeLocales[0] ?? 'en';
 
+  function makeInitialTabs(locales: string[], prefillName?: string): Record<string, LocaleTabState> {
+    const result: Record<string, LocaleTabState> = {};
+    for (const locale of locales) {
+      const isDefault = locale === 'en' || locale === defaultLocale;
+      const name = isDefault && prefillName ? prefillName : '';
+      result[locale] = { name, slug: name ? toSlug(name) : '', slugManuallyEdited: false };
+    }
+    return result;
+  }
+
   const [activeLocale, setActiveLocale] = useState(defaultLocale);
   const [tabStates, setTabStates] = useState<Record<string, LocaleTabState>>(
-    () => makeEmptyTabs(activeLocales),
+    () => makeInitialTabs(activeLocales, initialName),
   );
   const [isSaving, setIsSaving] = useState(false);
   const [nameError, setNameError] = useState<string | null>(null);
+
+  // Re-seed state whenever the dialog opens, picking up the latest initialName
+  useEffect(() => {
+    if (open) {
+      setTabStates(makeInitialTabs(activeLocales, initialName));
+      setActiveLocale(defaultLocale);
+      setNameError(null);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   // Ensure newly added locales get state
   const enrichedTabStates = { ...tabStates };
@@ -88,13 +111,15 @@ export function TagCreateDialog({
 
   const handleOpenChange = useCallback(
     (v: boolean) => {
-      if (v) {
+      if (!v) {
+        // Reset when closing so stale state doesn't flash on next open
         setTabStates(makeEmptyTabs(activeLocales));
         setActiveLocale(defaultLocale);
         setNameError(null);
       }
       onOpenChange(v);
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [activeLocales, defaultLocale, onOpenChange],
   );
 

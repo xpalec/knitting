@@ -199,6 +199,19 @@ export class AdminEntryService {
             },
           },
         },
+        tags: {
+          include: {
+            tag: {
+              select: {
+                id: true,
+                translations: {
+                  where: { locale: 'en' },
+                  select: { name: true },
+                },
+              },
+            },
+          },
+        },
         abbreviations: {
           include: { abbreviation: { include: { translations: true } } },
           orderBy: { sort_order: 'asc' },
@@ -206,8 +219,13 @@ export class AdminEntryService {
       },
     });
     if (!entry) throw new NotFoundException(`Entry ${id} not found`);
-    const { abbreviations, ...rest } = entry;
-    return { data: { ...rest, entry_abbreviations: abbreviations } };
+    const { abbreviations, tags, ...rest } = entry;
+    const category_id = entry.categories[0]?.category?.id ?? null;
+    const flatTags = tags.map((et) => ({
+      id: et.tag.id,
+      name: et.tag.translations[0]?.name ?? '',
+    }));
+    return { data: { ...rest, category_id, tags: flatTags, entry_abbreviations: abbreviations } };
   }
 
   async update(id: string, dto: UpdateEntryDto) {

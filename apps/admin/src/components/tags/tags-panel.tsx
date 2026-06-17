@@ -208,6 +208,10 @@ export function TagsPanel({
           isSearching={isSearching}
           searchError={searchError}
           onSelect={handleSelectTag}
+          onCreateWithName={(name) => {
+            setCreateDialogOpen(true);
+            // searchInput already holds the name; dialog will pick it up via initialName
+          }}
           disabled={disabled}
           activeLocale={activeLocale}
         />
@@ -233,6 +237,7 @@ export function TagsPanel({
         onCreated={(newTag) => {
           void handleSelectTag(newTag.id, newTag);
         }}
+        initialName={searchInput.trim() || undefined}
         queryKey={['tags']}
       />
 
@@ -335,6 +340,7 @@ interface AddTagComboboxProps {
   isSearching: boolean;
   searchError: string | null;
   onSelect: (tagId: string, tagObject: AdminTag) => void;
+  onCreateWithName: (name: string) => void;
   disabled?: boolean;
   activeLocale: string;
 }
@@ -348,6 +354,7 @@ function AddTagCombobox({
   isSearching,
   searchError,
   onSelect,
+  onCreateWithName,
   disabled,
   activeLocale,
 }: AddTagComboboxProps) {
@@ -397,7 +404,21 @@ function AddTagCombobox({
             ) : searchInput.length === 0 ? (
               <CommandEmpty>Type to search tags.</CommandEmpty>
             ) : results.length === 0 ? (
-              <CommandEmpty>No matching tags found.</CommandEmpty>
+              <CommandGroup>
+                <CommandItem
+                  value={`__create__${searchInput}`}
+                  onSelect={() => {
+                    onOpenChange(false);
+                    onCreateWithName(searchInput.trim());
+                  }}
+                  className="gap-2 text-violet-600"
+                >
+                  <Plus size={13} aria-hidden="true" className="shrink-0" />
+                  <span className="flex-1 truncate">
+                    Create tag "<span className="font-medium">{searchInput.trim()}</span>"
+                  </span>
+                </CommandItem>
+              </CommandGroup>
             ) : (
               <CommandGroup>
                 {results.map((tag) => {
