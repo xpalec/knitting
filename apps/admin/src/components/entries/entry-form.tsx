@@ -953,27 +953,37 @@ export function EntryForm({
         <div className="flex items-center gap-2 shrink-0">
           <StatusPill status={status} onChange={setStatus} disabled={isSubmitting} />
 
-          {onDelete && (
-            <Button
-              variant="outline"
-              type="button"
-              onClick={onDelete}
-              disabled={isSubmitting}
-              className="gap-1.5 text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300"
-            >
-              <Trash2 size={14} aria-hidden="true" /> Delete
-            </Button>
-          )}
-
-          <Button
-            variant="outline"
-            type="button"
-            disabled
-            className="gap-1.5 text-slate-400 border-slate-200"
-          >
-            <Upload size={14} aria-hidden="true" />
-            Import
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                type="button"
+                disabled={isSubmitting}
+                className="gap-1.5"
+              >
+                Actions
+                <ChevronDown size={14} aria-hidden="true" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem disabled className="gap-2 text-slate-400">
+                <Upload size={14} aria-hidden="true" />
+                Import
+              </DropdownMenuItem>
+              {onDelete && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={onDelete}
+                    className="gap-2 text-red-600 focus:text-red-600 focus:bg-red-50"
+                  >
+                    <Trash2 size={14} aria-hidden="true" />
+                    Delete
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {onCancel && (
             <Button
@@ -983,20 +993,7 @@ export function EntryForm({
               disabled={isSubmitting}
               className="gap-1.5"
             >
-              <X size={14} aria-hidden="true" /> Cancel
-            </Button>
-          )}
-
-          {onSaveDraft && (
-            <Button
-              variant="outline"
-              type="button"
-              onClick={handleSaveDraft}
-              disabled={isSubmitDisabled}
-              className="gap-1.5"
-            >
-              <Save size={14} aria-hidden="true" />
-              {isSubmitting ? 'Saving…' : 'Save draft'}
+              <X size={14} aria-hidden="true" /> Close
             </Button>
           )}
 
@@ -1010,8 +1007,10 @@ export function EntryForm({
                     disabled={isSubmitDisabled}
                     className="gap-1.5 bg-violet-600 hover:bg-violet-700 text-white"
                   >
-                    <Plus size={14} aria-hidden="true" />
-                    {isSubmitting ? 'Publishing…' : 'Publish'}
+                    {entryId ? <Save size={14} aria-hidden="true" /> : <Plus size={14} aria-hidden="true" />}
+                    {isSubmitting
+                      ? (entryId ? 'Saving…' : 'Publishing…')
+                      : (entryId ? 'Save' : 'Publish')}
                   </Button>
                 </span>
               </TooltipTrigger>

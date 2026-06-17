@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Save, X } from 'lucide-react';
@@ -97,6 +97,13 @@ export interface AbbreviationCreateDialogProps {
   onLinkAfterCreate?: (abbreviation: Abbreviation) => Promise<void>;
   /** Query key to invalidate on success (e.g. ['abbreviations']). */
   queryKey?: unknown[];
+  /**
+   * Pre-selects the source language and opens on the matching tab.
+   * When provided the source language field is hidden (set implicitly).
+   */
+  defaultSourceLanguage?: string;
+  /** Pre-fills the code field (e.g. when opening from a failed search). */
+  defaultCode?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -109,11 +116,13 @@ export function AbbreviationCreateDialog({
   onCreated,
   onLinkAfterCreate,
   queryKey,
+  defaultSourceLanguage,
+  defaultCode,
 }: AbbreviationCreateDialogProps) {
   const queryClient = useQueryClient();
   const { allLocales, localeLabels, defaultLanguage } = useLanguages();
   const activeLocales = allLocales.length > 0 ? allLocales : ['en'];
-  const defaultLocale = defaultLanguage?.locale ?? activeLocales[0] ?? 'en';
+  const defaultLocale = defaultSourceLanguage ?? defaultLanguage?.locale ?? activeLocales[0] ?? 'en';
 
   const [code, setCode] = useState('');
   const [sourceLanguage, setSourceLanguage] = useState(defaultLocale);
@@ -132,20 +141,24 @@ export function AbbreviationCreateDialog({
     }
   }
 
-  // Reset on open
+  // Reset state whenever the dialog opens (covers both prop-driven and interaction-driven opens)
+  useEffect(() => {
+    if (open) {
+      const initialLocale = defaultSourceLanguage ?? defaultLocale;
+      setCode(defaultCode ?? '');
+      setSourceLanguage(initialLocale);
+      setCodeError(null);
+      setTabStates(makeEmptyTabs(activeLocales));
+      setActiveLocale(initialLocale);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   const handleOpenChange = useCallback(
     (v: boolean) => {
-      if (v) {
-        setCode('');
-        setSourceLanguage(defaultLocale);
-        setCodeError(null);
-        setTabStates(makeEmptyTabs(activeLocales));
-        setActiveLocale(defaultLocale);
-      }
-      onOpenChange(v);
+      if (!isSaving) onOpenChange(v);
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [activeLocales, defaultLocale, onOpenChange],
+    [isSaving, onOpenChange],
   );
 
   // ── Mutations ─────────────────────────────────────────────────────────────
@@ -263,7 +276,7 @@ export function AbbreviationCreateDialog({
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!isSaving) handleOpenChange(v); }}>
       <DialogContent
-        className="max-w-5xl w-full p-0 overflow-hidden flex flex-col"
+        className="max-w-3xl w-full p-0 overflow-hidden flex flex-col"
         style={{ maxHeight: '90vh' }}
       >
         <DialogHeader className="px-6 pt-5 pb-0 shrink-0">
@@ -283,6 +296,61 @@ export function AbbreviationCreateDialog({
 
           {/* ── Left: locale tabs ─────────────────────────────────────── */}
           <div className="flex-1 min-w-0 overflow-y-auto px-6 pb-6">
+
+            {/* Code field + optional source language — above tabs */}
+            <div className="rounded-lg border border-slate-200 bg-white p-4 space-y-3 mb-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="new-abbrev-code">
+                  Code <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="new-abbrev-code"
+                  placeholder="e.g. K2tog"
+                  value={code}
+                  onChange={(e) => {
+                    setCode(e.target.value);
+                    setCodeError(null);
+                  }}
+                  disabled={isSaving}
+                  maxLength={255}
+                  className={cn(codeError && 'border-red-400')}
+                />
+                {codeError && (
+                  <p className="text-xs text-red-500">{codeError}</p>
+                )}
+              </div>
+
+              {/* Source language: hidden input when pre-set, select when open choice */}
+              {defaultSourceLanguage ? (
+                <input type="hidden" name="source_language" value={sourceLanguage} />
+              ) : (
+                <div className="space-y-1.5">
+                  <Label htmlFor="new-abbrev-source-lang">
+                    Source language <span className="text-red-500">*</span>
+                  </Label>
+                  <Select
+                    value={sourceLanguage}
+                    onValueChange={(v) => {
+                      setSourceLanguage(v);
+                      setCodeError(null);
+                    }}
+                    disabled={isSaving}
+                  >
+                    <SelectTrigger id="new-abbrev-source-lang">
+                      <SelectValue placeholder="Select language…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {allLocales.map((locale) => (
+                        <SelectItem key={locale} value={locale}>
+                          {localeLabels[locale] ?? locale}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+
             <Tabs value={activeLocale} onValueChange={setActiveLocale}>
               <TabsList variant="line" className="w-full justify-start">
                 {activeLocales.map((locale) => {
@@ -348,59 +416,6 @@ export function AbbreviationCreateDialog({
                 );
               })}
             </Tabs>
-          </div>
-
-          {/* ── Right: metadata sidebar ───────────────────────────────── */}
-          <div className="w-72 shrink-0 border-l border-slate-100 overflow-y-auto px-5 pb-6 space-y-4">
-            <div className="rounded-lg border border-slate-200 bg-white p-4 space-y-4">
-              <p className="text-sm font-semibold text-slate-700">Abbreviation</p>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="new-abbrev-code">
-                  Code <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="new-abbrev-code"
-                  placeholder="e.g. K2tog"
-                  value={code}
-                  onChange={(e) => {
-                    setCode(e.target.value);
-                    setCodeError(null);
-                  }}
-                  disabled={isSaving}
-                  maxLength={255}
-                  className={cn(codeError && 'border-red-400')}
-                />
-                {codeError && (
-                  <p className="text-xs text-red-500">{codeError}</p>
-                )}
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="new-abbrev-source-lang">
-                  Source language <span className="text-red-500">*</span>
-                </Label>
-                <Select
-                  value={sourceLanguage}
-                  onValueChange={(v) => {
-                    setSourceLanguage(v);
-                    setCodeError(null);
-                  }}
-                  disabled={isSaving}
-                >
-                  <SelectTrigger id="new-abbrev-source-lang">
-                    <SelectValue placeholder="Select language…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {allLocales.map((locale) => (
-                      <SelectItem key={locale} value={locale}>
-                        {localeLabels[locale] ?? locale}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
           </div>
         </div>
 

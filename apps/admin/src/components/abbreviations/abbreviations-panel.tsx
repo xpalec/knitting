@@ -81,6 +81,7 @@ export function AbbreviationsPanel({
 }: AbbreviationsPanelProps) {
   // ── Dialog state ──────────────────────────────────────────────────────────
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [createDialogCode, setCreateDialogCode] = useState('');
   const [editTarget, setEditTarget] = useState<Abbreviation | null>(null);
   const [removeTarget, setRemoveTarget] = useState<(EntryAbbreviation & { abbreviation: Abbreviation }) | null>(null);
 
@@ -220,6 +221,14 @@ export function AbbreviationsPanel({
           isSearching={isSearching}
           onSelect={handleSelectExisting}
           isLinking={linkMutation.isPending}
+          onCreateNew={(code) => {
+            setCreateDialogCode(code);
+            setSearchOpen(false);
+            setSearchInput('');
+            setDebouncedQ('');
+            setSearchResults([]);
+            setCreateDialogOpen(true);
+          }}
         />
         
         <Button
@@ -227,7 +236,10 @@ export function AbbreviationsPanel({
           variant="outline"
           size="sm"
           className="justify-start gap-1.5 text-xs"
-          onClick={() => setCreateDialogOpen(true)}
+          onClick={() => {
+            setCreateDialogCode('');
+            setCreateDialogOpen(true);
+          }}
         >
           <Plus size={13} aria-hidden="true" />
           Add
@@ -243,6 +255,8 @@ export function AbbreviationsPanel({
           onLinkChanged?.();
         }}
         queryKey={['abbreviations']}
+        defaultSourceLanguage={activeLocale}
+        defaultCode={createDialogCode}
       />
 
       {/* Edit dialog */}
@@ -317,14 +331,6 @@ function AbbreviationCard({ linked, activeLocale, onEdit, onRemove }: Abbreviati
         </span>
       )}
 
-      {/* Sort order */}
-      <span
-        className="text-[10px] text-slate-400 font-mono tabular-nums"
-        title={`Sort order: ${sort_order}`}
-      >
-        #{sort_order}
-      </span>
-
       {/* Edit button */}
       <button
         type="button"
@@ -361,6 +367,8 @@ interface AddExistingComboboxProps {
   isSearching: boolean;
   onSelect: (abbreviationId: string) => void;
   isLinking: boolean;
+  /** Called when user wants to create a new abbreviation with the current search term. */
+  onCreateNew: (code: string) => void;
 }
 
 function AddExistingCombobox({
@@ -372,6 +380,7 @@ function AddExistingCombobox({
   isSearching,
   onSelect,
   isLinking,
+  onCreateNew,
 }: AddExistingComboboxProps) {
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
@@ -415,7 +424,16 @@ function AddExistingCombobox({
             ) : searchInput.length === 0 ? (
               <CommandEmpty>Type to search abbreviations.</CommandEmpty>
             ) : results.length === 0 ? (
-              <CommandEmpty>No matching abbreviations found.</CommandEmpty>
+              <CommandGroup>
+                <CommandItem
+                  value="__create_new__"
+                  onSelect={() => onCreateNew(searchInput)}
+                  className="gap-2 text-violet-600"
+                >
+                  <Plus size={13} aria-hidden="true" />
+                  <span>Create &ldquo;{searchInput}&rdquo;</span>
+                </CommandItem>
+              </CommandGroup>
             ) : (
               <CommandGroup>
                 {results.map((abbr) => (

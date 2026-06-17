@@ -69,7 +69,7 @@ export default function NewEntryPage() {
   });
 
   return (
-    <div className="p-6">
+    <div>
       <EntryForm
         categories={categoriesData?.data}
         isLoadingCategories={isLoadingCategories}

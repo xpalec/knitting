@@ -274,7 +274,7 @@ export default function EntryEditPage({ params }: { params: Promise<{ id: string
 
   return (
     <>
-      <div className="p-6">
+      <div>
         <EntryForm
           defaultValues={mapEntryToFormValues(entry)}
           categories={categoriesData?.data}
