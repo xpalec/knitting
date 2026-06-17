@@ -96,13 +96,9 @@ export interface UpdateTranslationPayload {
   term: string;
   slug?: string;
   metadata?: Record<string, unknown>;
-  // Per-locale block content keyed by block order: { "1": { content: <TipTap JSON> }, … }
   blocks?: Record<string, { content?: unknown }>;
   status?: "draft" | "reviewed" | "published";
   translator_note?: string;
-  synonyms?: string[];
-  seo_title?: string;
-  seo_description?: string;
 }
 
 export function listEntryCategories(): Promise<ApiResponse<AdminCategory[]>> {
@@ -140,4 +136,11 @@ export const entriesApi = {
       `/api/v1/admin/entries/${id}/translations/${locale}`,
       payload,
     ),
+
+  /**
+   * Replaces the full tag set for an entry.
+   * Both linking and unlinking go through this — pass the complete desired set.
+   */
+  setTags: (entryId: string, tagIds: string[]): Promise<void> =>
+    apiPost<void>(`/api/v1/admin/entries/${entryId}/tags`, { ids: tagIds }),
 };

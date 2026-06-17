@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
-import { Search, ChevronsUpDown, X } from 'lucide-react';
+import { Search, ChevronsUpDown, Plus, Pencil, Trash2 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Command,
@@ -16,6 +17,9 @@ import {
   CommandList,
 } from '@/components/ui/command';
 import { MissingTranslationBadge } from '@/components/ui/missing-translation-badge';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { TagCreateDialog } from '@/components/tags/tag-create-dialog';
+import { TagEditDialog } from '@/components/tags/tag-edit-dialog';
 
 import { adminTagsApi, type AdminTag } from '@/lib/api/tags';
 import { entriesApi } from '@/lib/api/entries';
@@ -32,8 +36,10 @@ export interface TagsPanelProps {
   linkedTags: AdminTag[];
   /** The active locale code, used to pick the right translation. */
   activeLocale: string;
-  /** Called when the user links or unlinks a tag (updates parent form state). */
+  /** Called when the user links or unlinks a tag (updates parent form state — IDs only). */
   onTagsChange: (tagIds: string[]) => void;
+  /** Called when the full tag objects list changes (for optimistic UI). */
+  onTagObjectsChange?: (tags: AdminTag[]) => void;
   /** Called after a successful API link/unlink so the parent can refetch. */
   onLinkChanged?: () => void;
   disabled?: boolean;
@@ -64,6 +70,7 @@ export function TagsPanel({
   linkedTags,
   activeLocale,
   onTagsChange,
+  onTagObjectsChange,
   onLinkChanged,
   disabled,
 }: TagsPanelProps) {
@@ -74,6 +81,9 @@ export function TagsPanel({
   const [searchResults, setSearchResults] = useState<AdminTag[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<AdminTag | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<AdminTag | null>(null);
 
   // ── 300 ms debounce on search input ──────────────────────────────────────
   useEffect(() => {
@@ -108,31 +118,29 @@ export function TagsPanel({
   }, [debouncedQ, fetchResults]);
 
   // ── Link handler ──────────────────────────────────────────────────────────
-  async function handleSelectTag(tagId: string) {
-    // Guard against duplicates
+  async function handleSelectTag(tagId: string, tagObject?: AdminTag) {
     if (linkedTags.some((t) => t.id === tagId)) return;
 
+    const newIds = [...linkedTags.map((t) => t.id), tagId];
+
     if (entryId !== undefined) {
-      // Call API immediately if the endpoint exists
-      if (typeof (entriesApi as Record<string, unknown>).linkTag === 'function') {
-        try {
-          await (entriesApi as unknown as { linkTag: (entryId: string, tagId: string) => Promise<unknown> }).linkTag(entryId, tagId);
-          onLinkChanged?.();
-        } catch (err: unknown) {
-          const message = err instanceof Error ? err.message : 'Unknown error';
-          toast.error(`Failed to link tag: ${message}`);
-          return;
-        }
-      } else {
-        console.warn('[TagsPanel] entriesApi.linkTag not available; skipping API call.');
+      try {
+        await entriesApi.setTags(entryId, newIds);
+        onLinkChanged?.();
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        toast.error(`Failed to link tag: ${message}`);
+        return;
       }
     }
 
-    // Always update local state
-    const newIds = [...linkedTags.map((t) => t.id), tagId];
-    onTagsChange(newIds);
+    const fullTag: AdminTag = tagObject
+      ?? searchResults.find((t) => t.id === tagId)
+      ?? { id: tagId, translations: [], entry_count: 0 };
 
-    // Reset search
+    onTagsChange(newIds);
+    onTagObjectsChange?.([...linkedTags, fullTag]);
+
     setSearchInput('');
     setDebouncedQ('');
     setSearchResults([]);
@@ -141,25 +149,21 @@ export function TagsPanel({
 
   // ── Unlink handler ────────────────────────────────────────────────────────
   async function handleRemoveTag(tagId: string) {
+    const newIds = linkedTags.map((t) => t.id).filter((id) => id !== tagId);
+
     if (entryId !== undefined) {
-      // Call API immediately if the endpoint exists
-      if (typeof (entriesApi as Record<string, unknown>).unlinkTag === 'function') {
-        try {
-          await (entriesApi as unknown as { unlinkTag: (entryId: string, tagId: string) => Promise<unknown> }).unlinkTag(entryId, tagId);
-          onLinkChanged?.();
-        } catch (err: unknown) {
-          const message = err instanceof Error ? err.message : 'Unknown error';
-          toast.error(`Failed to unlink tag: ${message}`);
-          return;
-        }
-      } else {
-        console.warn('[TagsPanel] entriesApi.unlinkTag not available; skipping API call.');
+      try {
+        await entriesApi.setTags(entryId, newIds);
+        onLinkChanged?.();
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        toast.error(`Failed to remove tag: ${message}`);
+        return;
       }
     }
 
-    // Always update local state
-    const newIds = linkedTags.map((t) => t.id).filter((id) => id !== tagId);
     onTagsChange(newIds);
+    onTagObjectsChange?.(linkedTags.filter((t) => t.id !== tagId));
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -170,19 +174,20 @@ export function TagsPanel({
         Tags
       </Label>
 
-      {/* Linked tag chips */}
+      {/* Linked tag cards */}
       {linkedTags.length > 0 ? (
-        <ul className="flex flex-wrap gap-1.5" aria-label="Linked tags">
+        <ul className="space-y-2" aria-label="Linked tags">
           {linkedTags.map((tag) => {
             const { label, isFallback } = resolveTagLabel(tag, activeLocale);
             return (
-              <TagChip
+              <TagCard
                 key={tag.id}
-                tagId={tag.id}
+                tag={tag}
                 label={label}
                 isFallback={isFallback}
                 disabled={disabled}
-                onRemove={handleRemoveTag}
+                onEdit={() => setEditTarget(tag)}
+                onRemove={() => setRemoveTarget(tag)}
               />
             );
           })}
@@ -191,52 +196,128 @@ export function TagsPanel({
         <p className="text-xs text-slate-400 py-1">No tags linked yet.</p>
       )}
 
-      {/* Search popover */}
-      <AddTagCombobox
-        open={searchOpen}
-        onOpenChange={setSearchOpen}
-        searchInput={searchInput}
-        onSearchInputChange={setSearchInput}
-        results={searchResults}
-        isSearching={isSearching}
-        searchError={searchError}
-        onSelect={handleSelectTag}
-        disabled={disabled}
-        activeLocale={activeLocale}
+      {/* Action row */}
+      <div className="flex gap-2">
+        {/* Search popover */}
+        <AddTagCombobox
+          open={searchOpen}
+          onOpenChange={setSearchOpen}
+          searchInput={searchInput}
+          onSearchInputChange={setSearchInput}
+          results={searchResults}
+          isSearching={isSearching}
+          searchError={searchError}
+          onSelect={handleSelectTag}
+          disabled={disabled}
+          activeLocale={activeLocale}
+        />
+
+        {/* Add new tag button */}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="justify-start gap-1.5 text-xs"
+          disabled={disabled}
+          onClick={() => setCreateDialogOpen(true)}
+        >
+          <Plus size={13} aria-hidden="true" />
+          Add
+        </Button>
+      </div>
+
+      {/* Create tag dialog */}
+      <TagCreateDialog
+        open={createDialogOpen}
+        onOpenChange={setCreateDialogOpen}
+        onCreated={(newTag) => {
+          void handleSelectTag(newTag.id, newTag);
+        }}
+        queryKey={['tags']}
+      />
+
+      {/* Edit tag dialog */}
+      {editTarget && (
+        <TagEditDialog
+          open={editTarget !== null}
+          onOpenChange={(open) => { if (!open) setEditTarget(null); }}
+          tag={editTarget}
+          onSaved={(updatedTag) => {
+            onTagObjectsChange?.(
+              linkedTags.map((t) => t.id === updatedTag.id ? updatedTag : t),
+            );
+            setEditTarget(null);
+          }}
+          queryKey={['tags']}
+        />
+      )}
+
+      {/* Remove confirm dialog */}
+      <ConfirmDialog
+        open={removeTarget !== null}
+        onOpenChange={(open) => { if (!open) setRemoveTarget(null); }}
+        title="Remove tag"
+        description={
+          removeTarget
+            ? `Remove "${resolveTagLabel(removeTarget, activeLocale).label}" from this entry? The tag itself will not be deleted.`
+            : 'Remove this tag from this entry?'
+        }
+        confirmLabel="Remove"
+        loadingLabel="Removing…"
+        onConfirm={() => {
+          if (!removeTarget) return;
+          void handleRemoveTag(removeTarget.id);
+          setRemoveTarget(null);
+        }}
+        loading={false}
       />
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// TagChip sub-component
+// TagCard sub-component — mirrors AbbreviationCard look
 // ---------------------------------------------------------------------------
 
-interface TagChipProps {
-  tagId: string;
+interface TagCardProps {
+  tag: AdminTag;
   label: string;
   isFallback: boolean;
   disabled?: boolean;
-  onRemove: (tagId: string) => void;
+  onEdit: () => void;
+  onRemove: () => void;
 }
 
-function TagChip({ tagId, label, isFallback, disabled, onRemove }: TagChipProps) {
+function TagCard({ tag, label, isFallback, disabled, onEdit, onRemove }: TagCardProps) {
   return (
-    <li className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-700 shadow-xs">
-      <span className="truncate max-w-[140px] flex items-center gap-1">
+    <li className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 shadow-xs">
+      {/* Label */}
+      <span className="text-sm font-medium text-slate-800 flex-1 truncate flex items-center gap-1">
         {label}
         {isFallback && <MissingTranslationBadge />}
       </span>
-      {!disabled && (
-        <button
-          type="button"
-          onClick={() => onRemove(tagId)}
-          className="ml-0.5 rounded-full p-0.5 text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-red-400"
-          aria-label={`Remove tag ${label}`}
-        >
-          <X size={11} aria-hidden="true" />
-        </button>
-      )}
+
+      {/* Edit button */}
+      <button
+        type="button"
+        onClick={onEdit}
+        disabled={disabled}
+        className="p-1 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-violet-400 disabled:opacity-40"
+        aria-label={`Edit tag ${label}`}
+      >
+        <Pencil size={13} aria-hidden="true" />
+      </button>
+
+      {/* Remove button */}
+      <button
+        type="button"
+        onClick={onRemove}
+        disabled={disabled}
+        className="p-1 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-red-400 disabled:opacity-40"
+        aria-label={`Remove tag ${label}`}
+      >
+        <Trash2 size={13} aria-hidden="true" />
+      </button>
     </li>
   );
 }
@@ -253,7 +334,7 @@ interface AddTagComboboxProps {
   results: AdminTag[];
   isSearching: boolean;
   searchError: string | null;
-  onSelect: (tagId: string) => void;
+  onSelect: (tagId: string, tagObject: AdminTag) => void;
   disabled?: boolean;
   activeLocale: string;
 }
@@ -330,7 +411,7 @@ function AddTagCombobox({
                     <CommandItem
                       key={tag.id}
                       value={tag.id}
-                      onSelect={() => onSelect(tag.id)}
+                      onSelect={() => onSelect(tag.id, tag)}
                       className="gap-2"
                     >
                       <span className="text-sm flex-1 truncate flex items-center gap-1">

@@ -107,7 +107,7 @@ export function AbbreviationsPanel({
     try {
       const res = await abbreviationsApi.listAbbreviations({
         q,
-        source_language: entryOriginLanguage,
+        source_language: activeLocale,
         limit: 20,
       });
       // Filter out already-linked abbreviations
@@ -186,9 +186,10 @@ export function AbbreviationsPanel({
       </Label>
 
       {/* Linked abbreviation cards */}
-      {linkedAbbreviations.length > 0 ? (
+      {linkedAbbreviations.filter((la) => la.abbreviation.source_language === activeLocale).length > 0 ? (
         <ul className="space-y-2" aria-label="Linked abbreviations">
           {linkedAbbreviations
+            .filter((la) => la.abbreviation.source_language === activeLocale)
             .slice()
             .sort((a, b) => a.sort_order - b.sort_order)
             .map((linked) => (
@@ -206,18 +207,8 @@ export function AbbreviationsPanel({
       )}
 
       {/* Action row: Add new + Add existing */}
-      <div className="flex flex-col gap-2">
+      <div className="flex gap-2">
         {/* Add new button */}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="w-full justify-start gap-1.5 text-xs"
-          onClick={() => setCreateDialogOpen(true)}
-        >
-          <Plus size={13} aria-hidden="true" />
-          Add new abbreviation
-        </Button>
 
         {/* Add existing combobox */}
         <AddExistingCombobox
@@ -230,6 +221,17 @@ export function AbbreviationsPanel({
           onSelect={handleSelectExisting}
           isLinking={linkMutation.isPending}
         />
+        
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="justify-start gap-1.5 text-xs"
+          onClick={() => setCreateDialogOpen(true)}
+        >
+          <Plus size={13} aria-hidden="true" />
+          Add
+        </Button>
       </div>
 
       {/* Create dialog */}

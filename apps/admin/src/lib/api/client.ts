@@ -141,8 +141,8 @@ export const apiPatch = <T>(path: string, body?: unknown) =>
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 
-export const apiDelete = <T = void>(path: string) =>
-  request<T>(path, { method: "DELETE" });
+export const apiDelete = <T = void>(path: string, body?: Record<string, unknown>) =>
+  request<T>(path, { method: "DELETE", ...(body ? { body: JSON.stringify(body) } : {}) });
 
 /** Upload with FormData (no Content-Type header -- browser sets multipart boundary) */
 export const apiUpload = <T>(path: string, formData: FormData) =>

@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import {
   Save, Trash2, X, Upload, ChevronDown, ChevronUp,
-  GripVertical, MoreHorizontal, Plus, Check, ChevronsUpDown,
+  GripVertical, MoreHorizontal, Plus, Check, ChevronsUpDown, Copy,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -553,6 +553,11 @@ interface LocaleTabContentProps {
   contentBlockTypes?: ContentBlockType[];
   isSubmitting: boolean;
   onChange: (patch: Partial<LocaleTabState>) => void;
+  entryId?: string;
+  entryOriginLanguage?: string;
+  linkedAbbreviations?: (import('@/lib/api/abbreviations').EntryAbbreviation & { abbreviation: import('@/lib/api/abbreviations').Abbreviation })[];
+  onLinkChanged?: () => void;
+  activeLocale: string;
 }
 
 function LocaleTabContent({
@@ -561,6 +566,11 @@ function LocaleTabContent({
   contentBlockTypes,
   isSubmitting,
   onChange,
+  entryId,
+  entryOriginLanguage,
+  linkedAbbreviations,
+  onLinkChanged,
+  activeLocale,
 }: LocaleTabContentProps) {
   function handleTitleChange(value: string) {
     const patch: Partial<LocaleTabState> = { title: value };
@@ -570,58 +580,88 @@ function LocaleTabContent({
 
   return (
     <div className="space-y-4 pt-4">
-      {/* Title + Slug + Short description */}
-      <div className="rounded-lg border border-slate-200 bg-white p-4 space-y-4">
-        <div className="grid grid-cols-2 gap-3">
-          {/* Title */}
-          <div className="space-y-1.5">
-            <Label htmlFor={`title-${locale}`}>
-              Title <span className="text-red-500">*</span>
-            </Label>
-            <Input
-              id={`title-${locale}`}
-              placeholder="Entry title"
-              value={state.title}
-              onChange={(e) => handleTitleChange(e.target.value)}
-              disabled={isSubmitting}
-            />
+      {/* Title + Slug + Short description (left) / Abbreviations (right) */}
+      <div className="rounded-lg border border-slate-200 bg-white p-4">
+        <div className="grid grid-cols-2 gap-5 items-start">
+          {/* Left column: fields */}
+          <div className="space-y-4">
+            {/* Title */}
+            <div className="space-y-1.5">
+              <Label htmlFor={`title-${locale}`}>
+                Title <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id={`title-${locale}`}
+                placeholder="Entry title"
+                value={state.title}
+                onChange={(e) => handleTitleChange(e.target.value)}
+                disabled={isSubmitting}
+              />
+            </div>
+
+            {/* Slug */}
+            <div className="space-y-1.5">
+              <Label htmlFor={`slug-${locale}`}>
+                Slug <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id={`slug-${locale}`}
+                placeholder="entry-title"
+                value={state.slug}
+                onChange={(e) => onChange({ slug: e.target.value, slugManuallyEdited: true })}
+                disabled={isSubmitting}
+                className="font-mono text-sm text-slate-500"
+              />
+              {state.title.trim() && !state.slug.trim() && (
+                <p className="text-xs text-amber-600">
+                  Add a slug to make this locale complete.
+                </p>
+              )}
+            </div>
+
+            {/* Short description */}
+            <div className="space-y-1.5">
+              <Label htmlFor={`short-desc-${locale}`}>
+                Short description <span className="text-red-500">*</span>
+              </Label>
+              <Textarea
+                id={`short-desc-${locale}`}
+                placeholder="A brief description of this entry…"
+                value={state.shortDescription}
+                onChange={(e) => onChange({ shortDescription: e.target.value })}
+                disabled={isSubmitting}
+                rows={4}
+                className="resize-none"
+              />
+            </div>
           </div>
 
-          {/* Slug */}
-          <div className="space-y-1.5">
-            <Label htmlFor={`slug-${locale}`}>
-              Slug <span className="text-red-500">*</span>
-            </Label>
-            <Input
-              id={`slug-${locale}`}
-              placeholder="entry-title"
-              value={state.slug}
-              onChange={(e) => onChange({ slug: e.target.value, slugManuallyEdited: true })}
+          {/* Right column: synonyms + abbreviations */}
+          <div className="space-y-4">
+            <ChipInput
+              label="Synonyms"
+              chips={state.synonyms}
+              onChange={(chips) => onChange({ synonyms: chips })}
+              placeholder="Add synonym…"
               disabled={isSubmitting}
-              className="font-mono text-sm text-slate-500"
             />
-            {state.title.trim() && !state.slug.trim() && (
-              <p className="text-xs text-amber-600">
-                Add a slug to make this locale complete.
-              </p>
+            {entryId ? (
+              <AbbreviationsPanel
+                entryId={entryId}
+                entryOriginLanguage={entryOriginLanguage ?? 'en'}
+                linkedAbbreviations={linkedAbbreviations ?? []}
+                onLinkChanged={onLinkChanged}
+                activeLocale={activeLocale}
+              />
+            ) : (
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Abbreviations</p>
+                <div className="rounded-md border border-dashed border-slate-200 p-3 text-xs text-slate-400">
+                  Abbreviations can be linked after the entry is saved.
+                </div>
+              </div>
             )}
           </div>
-        </div>
-
-        {/* Short description */}
-        <div className="space-y-1.5">
-          <Label htmlFor={`short-desc-${locale}`}>
-            Short description <span className="text-red-500">*</span>
-          </Label>
-          <Textarea
-            id={`short-desc-${locale}`}
-            placeholder="A brief description of this entry…"
-            value={state.shortDescription}
-            onChange={(e) => onChange({ shortDescription: e.target.value })}
-            disabled={isSubmitting}
-            rows={3}
-            className="resize-none"
-          />
         </div>
       </div>
 
@@ -815,6 +855,7 @@ export function EntryForm({
   }
   const [status, setStatus] = useState<EntryStatus>(defaultValues?.status ?? 'draft');
   const [tags, setTags] = useState<string[]>(defaultValues?.tags ?? []);
+  const [linkedTagObjects, setLinkedTagObjects] = useState<AdminTag[]>(linkedTags ?? []);
   const [abbreviations, setAbbreviations] = useState<LinkedAbbreviationState[]>(defaultValues?.abbreviations ?? []);
   const [locales, setLocales] = useState<Record<string, LocaleTabState>>(
     () => buildDefaultLocales(activeLocales, defaultValues),
@@ -1020,6 +1061,11 @@ export function EntryForm({
                   contentBlockTypes={contentBlockTypes}
                   isSubmitting={isSubmitting}
                   onChange={(patch) => handleLocaleChange(locale, patch)}
+                  entryId={entryId}
+                  entryOriginLanguage={entryOriginLanguage}
+                  linkedAbbreviations={linkedAbbreviations}
+                  onLinkChanged={onLinkChanged}
+                  activeLocale={activeLocale}
                 />
               </TabsContent>
             ))}
@@ -1076,37 +1122,15 @@ export function EntryForm({
                   </p>
                 )}
 
-                <ChipInput
-                  label="Synonyms"
-                  chips={enrichedLocales[activeLocale]?.synonyms ?? []}
-                  onChange={(chips) => handleLocaleChange(activeLocale, { synonyms: chips })}
-                  placeholder="Add synonym…"
-                  disabled={isSubmitting}
-                />
-
                 <TagsPanel
                   entryId={entryId}
-                  linkedTags={linkedTags ?? []}
+                  linkedTags={linkedTagObjects}
                   activeLocale={activeLocale}
                   onTagsChange={setTags}
+                  onTagObjectsChange={setLinkedTagObjects}
                   onLinkChanged={onTagLinkChanged}
                   disabled={isSubmitting}
                 />
-
-                {/* Abbreviations panel — only rendered for existing (saved) entries */}
-                {entryId ? (
-                  <AbbreviationsPanel
-                    entryId={entryId}
-                    entryOriginLanguage={entryOriginLanguage ?? 'en'}
-                    linkedAbbreviations={linkedAbbreviations ?? []}
-                    onLinkChanged={onLinkChanged}
-                    activeLocale={activeLocale}
-                  />
-                ) : (
-                  <div className="rounded-md border border-dashed border-slate-200 p-3 text-xs text-slate-400">
-                    Abbreviations can be linked after the entry is saved.
-                  </div>
-                )}
               </TabsContent>
 
               {/* Images tab */}
@@ -1119,6 +1143,27 @@ export function EntryForm({
 
               {/* SEO tab */}
               <TabsContent value="seo" className="p-4 space-y-4 mt-0">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                    {activeLocale.toUpperCase()}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleLocaleChange(activeLocale, {
+                        seoTitle: (enrichedLocales[activeLocale]?.title ?? '').slice(0, SEO_TITLE_MAX),
+                        seoDescription: (enrichedLocales[activeLocale]?.shortDescription ?? '').slice(0, SEO_DESC_MAX),
+                      })
+                    }
+                    disabled={isSubmitting}
+                    className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-violet-600 disabled:opacity-40 transition-colors"
+                    title="Copy title and short description"
+                  >
+                    <Copy size={11} aria-hidden="true" />
+                    Copy from entry
+                  </button>
+                </div>
+
                 <div className="space-y-1.5">
                   <Label htmlFor={`seo-title-${activeLocale}`} className="text-xs text-slate-500">SEO Title</Label>
                   <Input

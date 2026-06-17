@@ -160,27 +160,20 @@ export default function EntryEditPage({ params }: { params: Promise<{ id: string
         await entriesApi.updateEntryStatus(id, values.status as EntryStatus);
       }
 
-      // 3. Tag reconciliation — compute set difference between server tags and submitted tags
-      // (Requirements 8.3, 8.5)
-      const serverTagIds = new Set((entry?.tags ?? []).map((t) => t.id));
-      const submittedTagIds = new Set(values.tags);
-      const toAdd = [...submittedTagIds].filter((tagId) => !serverTagIds.has(tagId));
-      const toRemove = [...serverTagIds].filter((tagId) => !submittedTagIds.has(tagId));
+      // 3. Tag reconciliation — replace the full tag set if it changed
+      const serverTagIds = (entry?.tags ?? []).map((t) => t.id).sort();
+      const submittedTagIds = [...values.tags].sort();
+      const tagsChanged =
+        serverTagIds.length !== submittedTagIds.length ||
+        serverTagIds.some((id, i) => id !== submittedTagIds[i]);
 
-      const api = entriesApi as Record<string, unknown>;
-      if (typeof api.linkTag === 'function' && typeof api.unlinkTag === 'function') {
+      if (tagsChanged) {
         try {
-          await Promise.all([
-            ...toAdd.map((tagId) => (api.linkTag as (entryId: string, tagId: string) => Promise<unknown>)(id, tagId)),
-            ...toRemove.map((tagId) => (api.unlinkTag as (entryId: string, tagId: string) => Promise<unknown>)(id, tagId)),
-          ]);
+          await entriesApi.setTags(id, values.tags);
         } catch (tagError) {
-          // Surface tag link/unlink errors as toast without resetting form state (Requirement 8.4)
-          toast.error('Failed to update tag links. Other changes were saved.');
+          toast.error('Failed to update tags. Other changes were saved.');
           console.error('[EntryForm] Tag reconciliation error:', tagError);
         }
-      } else {
-        console.warn('[EntryForm] entriesApi.linkTag / unlinkTag not available; skipping tag reconciliation.');
       }
 
       // 4. Upsert translations for each locale that has a title
@@ -200,21 +193,18 @@ export default function EntryEditPage({ params }: { params: Promise<{ id: string
             const seoTitleTrimmed = ls.seoTitle.trim();
             const seoDescriptionTrimmed = ls.seoDescription.trim();
 
+            // Build metadata — merge definition_short, synonyms, and SEO fields
+            const metadata: Record<string, unknown> = {};
+            if (ls.shortDescription.trim()) metadata.definition_short = ls.shortDescription.trim();
+            metadata.synonyms = ls.synonyms;
+            if (seoTitleTrimmed) metadata.seo_title = seoTitleTrimmed;
+            if (seoTitleTrimmed && seoDescriptionTrimmed) metadata.seo_description = seoDescriptionTrimmed;
+
             return entriesApi.updateTranslation(id, locale, {
               term: ls.title.trim(),
               slug: ls.slug.trim() || undefined,
-              metadata: ls.shortDescription.trim()
-                ? { definition_short: ls.shortDescription.trim() }
-                : undefined,
+              metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
               blocks: Object.keys(blocks).length > 0 ? blocks : undefined,
-              // Always include synonyms, even if empty array (clears previously saved synonyms)
-              synonyms: ls.synonyms,
-              // Include seo_title only when non-empty (Requirement 6.7)
-              seo_title: seoTitleTrimmed || undefined,
-              // Include seo_description only when both seo_title and seo_description are non-empty
-              seo_description: seoTitleTrimmed && seoDescriptionTrimmed
-                ? seoDescriptionTrimmed
-                : undefined,
             });
           }),
       );
