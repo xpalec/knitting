@@ -14,6 +14,7 @@ import { contentBlockTypesApi } from '@/lib/api/content-block-types';
 import { ApiError } from '@/lib/api/client';
 import type { AdminTag } from '@/lib/api/tags';
 import { useAuthStore } from '@/store/auth';
+import { useLanguages } from '@/hooks/useLanguages';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -28,7 +29,7 @@ import type { EntryFormValues, SupportedLocale, BlockEditorState } from '@/compo
 let _idSeq = 1000;
 function nextId() { return `b-${_idSeq++}`; }
 
-function mapEntryToFormValues(entry: Entry): EntryFormValues {
+export function mapEntryToFormValues(entry: Entry, activeLocales: string[] = []): EntryFormValues {
   const locales: EntryFormValues['locales'] = {};
 
   // Block structure comes from the linked template (ordered list of slots).
@@ -40,7 +41,7 @@ function mapEntryToFormValues(entry: Entry): EntryFormValues {
   // this mapping just preserves any existing translation data.
   const translationLocales = (entry.translations ?? []).map((t) => t.locale);
   // Also ensure we populate any standard locales even if not yet translated
-  const allLocales = Array.from(new Set([...translationLocales]));
+  const allLocales = Array.from(new Set([...activeLocales, ...translationLocales]));
 
   for (const locale of allLocales) {
     const t = entry.translations?.find((tr) => tr.locale === locale);
@@ -99,6 +100,7 @@ export default function EntryEditPage({ params }: { params: Promise<{ id: string
   const router = useRouter();
   const queryClient = useQueryClient();
   const currentUser = useAuthStore((s) => s.currentUser);
+  const { allLocales } = useLanguages();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   // Role guard — allow both admin and editor to edit
@@ -276,7 +278,7 @@ export default function EntryEditPage({ params }: { params: Promise<{ id: string
     <>
       <div>
         <EntryForm
-          defaultValues={mapEntryToFormValues(entry)}
+          defaultValues={mapEntryToFormValues(entry, allLocales)}
           categories={categoriesData?.data}
           isLoadingCategories={isLoadingCategories}
           categoriesError={categoriesError}

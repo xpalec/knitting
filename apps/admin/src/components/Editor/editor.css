@@ -2,3 +2,8 @@
   outline-color: #7c3aed !important;
   outline-width: 1px;
 }
+
+/* Higher specificity than the library's own .tiptap.ProseMirror rule */
+.rte-wrapper .tiptap.ProseMirror {
+  min-height: 450px !important;
+}

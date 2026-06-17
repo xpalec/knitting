@@ -310,7 +310,7 @@ export default function Editor({
   if (!editor) return null;
 
   return (
-    <div className="overflow-hidden rounded-[0.5rem] bg-background !border !border-border">
+    <div className="rte-wrapper overflow-hidden rounded-[0.5rem] bg-background !border !border-border">
       <RichTextProvider editor={editor}>
         <div className="flex max-h-full w-full flex-col">
           <RichTextToolbar />
