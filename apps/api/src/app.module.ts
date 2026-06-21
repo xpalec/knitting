@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { CacheModule } from '@nestjs/cache-manager';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
-import { createKeyv } from '@keyv/redis';
 import { CacheableMemory } from 'cacheable';
 import { Keyv } from 'keyv';
 
@@ -41,17 +40,14 @@ import { AdminEntryRelationshipModule } from './admin/entry-relationship/admin-e
 import { UserModule } from './user/user.module';
 import { MediaModule } from './media/media.module';
 
-const REDIS_URL = process.env.REDIS_URL ?? 'redis://localhost:6379';
-
 @Module({
   imports: [
-    // Cache with Redis + in-memory fallback
+    // Cache with in-memory only (Redis disabled)
     CacheModule.registerAsync({
       isGlobal: true,
       useFactory: () => ({
         stores: [
           new Keyv({ store: new CacheableMemory({ ttl: 60_000, lruSize: 5000 }) }),
-          createKeyv(REDIS_URL),
         ],
       }),
     }),
