@@ -182,11 +182,6 @@ async function main() {
       status: 'published' },
   ]);
 
-  // Alias for use in category assignment below
-  const yo = { id: yoId };
-  const k2tog = { id: k2togId };
-  const brioche = { id: briocheId };
-
   console.log('  3 Entry rows, 6 Translation rows');
 
   // Verify trigger populated search_vector
@@ -196,54 +191,38 @@ async function main() {
   console.log(`  search_vector populated on ${svResult[0].count} Translation rows`);
 
   // ---------------------------------------------------------------------------
-  // Categories — 7 top-level, en + pl translations each
+  // Categories — delete all existing, then create 18 new ones (en + pl)
   // ---------------------------------------------------------------------------
+  // Drop existing category translations and categories so we start clean
+  await prisma.categoryTranslation.deleteMany({});
+  await prisma.category.deleteMany({});
+  console.log('  Cleared existing categories');
+
   const CATEGORIES = [
-    {
-      slug_en: 'stitches', name_en: 'Stitches',
-      slug_pl: 'sciegi',   name_pl: 'Ściegi',
-      sort_order: 0,
-    },
-    {
-      slug_en: 'techniques', name_en: 'Techniques',
-      slug_pl: 'techniki',   name_pl: 'Techniki',
-      sort_order: 1,
-    },
-    {
-      slug_en: 'tools-and-materials', name_en: 'Tools & materials',
-      slug_pl: 'narzedzia-i-materialy', name_pl: 'Narzędzia i materiały',
-      sort_order: 2,
-    },
-    {
-      slug_en: 'yarn-and-fiber', name_en: 'Yarn & fiber',
-      slug_pl: 'wloczka-i-wlokno', name_pl: 'Włóczka i włókno',
-      sort_order: 3,
-    },
-    {
-      slug_en: 'construction', name_en: 'Construction',
-      slug_pl: 'konstrukcja',   name_pl: 'Konstrukcja',
-      sort_order: 4,
-    },
-    {
-      slug_en: 'finishing', name_en: 'Finishing',
-      slug_pl: 'wykanczanie', name_pl: 'Wykańczanie',
-      sort_order: 5,
-    },
-    {
-      slug_en: 'traditions-and-styles', name_en: 'Traditions & styles',
-      slug_pl: 'tradycje-i-style',     name_pl: 'Tradycje i style',
-      sort_order: 6,
-    },
+    { slug_en: 'basic-stitches',                name_en: 'Basic stitches',                  slug_pl: 'oczka-podstawowe',                       name_pl: 'Oczka podstawowe' },
+    { slug_en: 'increases',                      name_en: 'Increases',                        slug_pl: 'dodawanie-oczek',                         name_pl: 'Dodawanie oczek' },
+    { slug_en: 'decreases',                      name_en: 'Decreases',                        slug_pl: 'odejmowanie-oczek',                       name_pl: 'Odejmowanie oczek' },
+    { slug_en: 'cast-ons',                       name_en: 'Cast-ons',                         slug_pl: 'nabieranie-oczek',                        name_pl: 'Nabieranie oczek' },
+    { slug_en: 'bind-offs',                      name_en: 'Bind-offs',                        slug_pl: 'zamykanie-oczek',                         name_pl: 'Zamykanie oczek' },
+    { slug_en: 'cables-and-twisted-stitches',    name_en: 'Cables & twisted stitches',        slug_pl: 'warkocze-i-oczka-przekrecone',            name_pl: 'Warkocze i oczka przekręcone' },
+    { slug_en: 'lace',                           name_en: 'Lace',                             slug_pl: 'azury',                                   name_pl: 'Ażury' },
+    { slug_en: 'colourwork',                     name_en: 'Colourwork',                       slug_pl: 'wzory-wielokolorowe',                     name_pl: 'Wzory wielokolorowe' },
+    { slug_en: 'textured-and-slipped-stitches',  name_en: 'Textured & slipped stitches',      slug_pl: 'sciegi-strukturalne-i-oczka-zdejmowane',  name_pl: 'Ściegi strukturalne i oczka zdejmowane' },
+    { slug_en: 'brioche-and-tuck-stitches',      name_en: 'Brioche & tuck stitches',          slug_pl: 'sciegi-patentowe-i-oczka-wkluwane',       name_pl: 'Ściegi patentowe i oczka wkłuwane poniżej' },
+    { slug_en: 'short-rows-and-shaping',         name_en: 'Short rows & shaping',             slug_pl: 'rzedy-skrocone-i-modelowanie',             name_pl: 'Rzędy skrócone i modelowanie' },
+    { slug_en: 'construction-methods',           name_en: 'Construction methods',             slug_pl: 'metody-konstrukcji',                      name_pl: 'Metody konstrukcji' },
+    { slug_en: 'finishing-techniques',           name_en: 'Finishing techniques',             slug_pl: 'techniki-wykonczeniowe',                  name_pl: 'Techniki wykończeniowe' },
+    { slug_en: 'pattern-reading-and-notation',   name_en: 'Pattern reading & notation',       slug_pl: 'czytanie-wzorow-i-oznaczenia',             name_pl: 'Czytanie wzorów i oznaczenia' },
+    { slug_en: 'gauge-and-tension',              name_en: 'Gauge & tension',                  slug_pl: 'probka-gestosc-i-naprezenie',              name_pl: 'Próbka, gęstość i naprężenie' },
+    { slug_en: 'yarn-and-fibre',                 name_en: 'Yarn & fibre',                     slug_pl: 'wloczki-i-wlokna',                        name_pl: 'Włóczki i włókna' },
+    { slug_en: 'tools-and-equipment',            name_en: 'Tools & equipment',                slug_pl: 'narzedzia-i-akcesoria',                   name_pl: 'Narzędzia i akcesoria' },
+    { slug_en: 'traditions-history-and-culture', name_en: 'Traditions, history & culture',    slug_pl: 'tradycje-historia-i-kultura',              name_pl: 'Tradycje, historia i kultura' },
   ];
 
-  for (const cat of CATEGORIES) {
-    const existing = await prisma.categoryTranslation.findUnique({
-      where: { locale_slug: { locale: 'en', slug: cat.slug_en } },
-    });
-    if (existing) continue; // idempotent
-
+  for (let i = 0; i < CATEGORIES.length; i++) {
+    const cat = CATEGORIES[i];
     const category = await prisma.category.create({
-      data: { type: 'entry', sort_order: cat.sort_order, status: 'published' },
+      data: { type: 'entry', sort_order: i, status: 'published' },
     });
     await prisma.categoryTranslation.createMany({
       data: [
@@ -253,29 +232,6 @@ async function main() {
     });
   }
   console.log(`  ${CATEGORIES.length} Category rows, ${CATEGORIES.length * 2} CategoryTranslation rows`);
-
-  // Assign the 3 seed entries to the "Stitches" category
-  const stitchesCt = await prisma.categoryTranslation.findUnique({
-    where: { locale_slug: { locale: 'en', slug: 'stitches' } },
-  });
-  if (stitchesCt) {
-    for (const entryId of [yo.id, k2tog.id, brioche.id]) {
-      await prisma.entryCategory.upsert({
-        where: { entry_id_category_id: { entry_id: entryId, category_id: stitchesCt.category_id } },
-        update: {},
-        create: { entry_id: entryId, category_id: stitchesCt.category_id },
-      });
-    }
-    // Manually sync entry_count (trigger fires on insert, but upsert may not fire it in all Postgres versions)
-    await prisma.$executeRaw`
-      UPDATE category SET entry_count = (
-        SELECT COUNT(*) FROM entry_category ec
-        JOIN entry e ON e.id = ec.entry_id
-        WHERE ec.category_id = category.id AND e.status = 'published'
-      ) WHERE id = ${stitchesCt.category_id}::uuid
-    `;
-    console.log('  3 entries assigned to Stitches category');
-  }
 
   // ---------------------------------------------------------------------------
   // Tags — 4 tags, en + pl translations each

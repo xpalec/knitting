@@ -121,3 +121,57 @@ pnpm --filter=api prisma studio
 - [`docs/implementation-plan.md`](docs/implementation-plan.md) — phase-by-phase build plan
 - [`docs/tasks.md`](docs/tasks.md) — full task checklist
 - [`docs/03-data-model.md`](docs/03-data-model.md) — database schema reference (v2.3)
+
+## Copying data between environments
+
+Use `pg_dump` and `pg_restore` to move database content between production, staging, and local environments. Migrations (schema) travel via git — only the data needs to be dumped.
+
+### Full database copy (production → local)
+
+```sh
+# 1. Dump the production database
+pg_dump $PROD_DATABASE_URL --no-owner --no-acl -F c -f backup.dump
+
+# 2. Apply any pending schema migrations to the target first
+pnpm --filter=api prisma migrate deploy
+
+# 3. Restore the dump into the local database
+pg_restore --no-owner --no-acl -d $LOCAL_DATABASE_URL --clean --if-exists backup.dump
+```
+
+`-F c` uses the custom binary format (smaller, faster than plain SQL).  
+`--clean --if-exists` drops existing objects before recreating them so the restore is idempotent.
+
+### Partial copy — specific tables only
+
+Useful when you only want to sync content (categories, entries, translations) without touching users or settings:
+
+```sh
+# Dump selected tables
+pg_dump $PROD_DATABASE_URL \
+  -t category -t category_translation \
+  -t entry -t translation \
+  -t tag -t tag_translation -t entry_tag \
+  --no-owner --no-acl -F c -f content.dump
+
+# Restore into local (use --data-only if schema already matches)
+pg_restore --no-owner --no-acl --data-only -d $LOCAL_DATABASE_URL content.dump
+```
+
+### Shortcuts with connection strings
+
+If your environment variables are already set, you can reference them directly:
+
+```sh
+# Example: local Docker setup from the default .env
+LOCAL_DATABASE_URL="postgresql://knitting:knitting@localhost:5432/knitting"
+
+pg_dump "$PROD_DATABASE_URL" --no-owner --no-acl -F c -f backup.dump
+pg_restore --no-owner --no-acl -d "$LOCAL_DATABASE_URL" --clean --if-exists backup.dump
+```
+
+### Notes
+
+- **Schema first** — always run `pnpm --filter=api prisma migrate deploy` on the target before restoring data to ensure the tables exist and match.
+- **UUIDs are preserved** — `pg_restore` keeps the original IDs, so relationships between entries, categories, and tags stay intact.
+- **Seed vs. dump** — use the seed (`pnpm --filter=api prisma db seed`) for a clean blank-slate bootstrap; use `pg_dump`/`pg_restore` when you want to carry over real content you've built up.

@@ -63,6 +63,17 @@ enum MediaType {
   chart
 }
 
+enum EntryRelationshipType {
+  PREREQUISITE
+  VARIANT_OF
+  ALTERNATIVE_TO
+  COMMONLY_CONFUSED_WITH
+  USED_IN
+  PART_OF
+  COUNTERPART_OF
+  RELATED_TO
+}
+
 
 enum ContributionType {
   entry
@@ -105,6 +116,8 @@ model Entry {
   related_from      RelatedEntry[]  @relation("RelatedFrom")
   related_to        RelatedEntry[]  @relation("RelatedTo")
   contributions     Contribution[]
+  relationship_sources EntryRelationship[] @relation("RelationshipSource")
+  relationship_targets EntryRelationship[] @relation("RelationshipTarget")
   learning_path_entries LearningPathEntry[]
   abbreviations     EntryAbbreviation[]
 
@@ -308,6 +321,29 @@ model RelatedEntry {
   related Entry @relation("RelatedTo", fields: [related_id], references: [id], onDelete: Cascade)
 
   @@map("related_entry")
+}
+
+// ---------------------------------------------------------------------------
+// EntryRelationship
+// Directed, typed relationship between two entries.
+// The unique constraint on (source_entry_id, target_entry_id, type) prevents
+// duplicate relationships of the same type between the same pair of entries.
+// ---------------------------------------------------------------------------
+
+model EntryRelationship {
+  id              String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  source_entry_id String                @db.Uuid
+  target_entry_id String                @db.Uuid
+  type            EntryRelationshipType
+  note            String?               @db.VarChar(500)
+  created_at      DateTime              @default(now()) @db.Timestamptz
+
+  source_entry Entry @relation("RelationshipSource", fields: [source_entry_id], references: [id], onDelete: Cascade)
+  target_entry Entry @relation("RelationshipTarget", fields: [target_entry_id], references: [id], onDelete: Cascade)
+
+  @@unique([source_entry_id, target_entry_id, type])
+  @@index([source_entry_id])
+  @@map("entry_relationship")
 }
 
 // ---------------------------------------------------------------------------

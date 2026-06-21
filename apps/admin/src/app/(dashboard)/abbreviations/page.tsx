@@ -6,11 +6,12 @@ import {
   CaseSensitive,
   FileX,
   MoreHorizontal,
-  Plus,
+  CircleFadingPlus,
   Search,
   Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { Checkbox } from '@/components/ui/checkbox';
 
 import { abbreviationsApi } from '@/lib/api/abbreviations';
 import type { Abbreviation } from '@/lib/api/abbreviations';
@@ -24,6 +25,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { StatCard } from '@/components/ui/stat-card';
 import {
   Select,
   SelectContent,
@@ -77,6 +79,7 @@ function SkeletonRows() {
     <>
       {Array.from({ length: 5 }).map((_, i) => (
         <TableRow key={i}>
+          <TableCell><Skeleton className="h-4 w-4" /></TableCell>
           <TableCell><Skeleton className="h-4 w-24" /></TableCell>
           <TableCell><Skeleton className="h-5 w-16 rounded-full" /></TableCell>
           <TableCell><Skeleton className="h-4 w-8 text-center" /></TableCell>
@@ -108,6 +111,11 @@ export default function AbbreviationsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Abbreviation | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Abbreviation | null>(null);
+
+  // ── Selection & bulk delete state ──────────────────────────────────────────
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
   // ── 300 ms debounce on search ──────────────────────────────────────────────
   useEffect(() => {
@@ -176,6 +184,28 @@ export default function AbbreviationsPage() {
     setPage(1);
   }
 
+  // ── Bulk delete handler ────────────────────────────────────────────────────
+  async function handleBulkDelete() {
+    const ids = [...selectedIds];
+    setBulkDeleteOpen(false);
+    setIsBulkDeleting(true);
+    try {
+      const results = await Promise.allSettled(
+        ids.map((id) => abbreviationsApi.deleteAbbreviation(id))
+      );
+      const succeeded = results.filter((r) => r.status === 'fulfilled').length;
+      const failed = results.filter((r) => r.status === 'rejected').length;
+      const failedIds = ids.filter((_, i) => results[i]?.status === 'rejected');
+      if (succeeded > 0) toast.success(`${succeeded} abbreviation${succeeded === 1 ? '' : 's'} deleted`);
+      if (failed > 0) toast.error(`${failed} abbreviation${failed === 1 ? '' : 's'} could not be deleted`);
+      setSelectedIds(failed === 0 ? new Set() : new Set(failedIds));
+      queryClient.invalidateQueries({ queryKey: ['abbreviations'] });
+      queryClient.invalidateQueries({ queryKey: ['abbreviations-summary'] });
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  }
+
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
@@ -189,26 +219,20 @@ export default function AbbreviationsPage() {
           className="gap-2 bg-violet-600 hover:bg-violet-700 text-white"
           onClick={() => setCreateOpen(true)}
         >
-          <Plus size={16} aria-hidden="true" />
-          New abbreviation
+          <CircleFadingPlus size={16} aria-hidden="true" />
+          Add abbreviation
         </Button>
       </PageHeader>
 
       {/* Stats bar */}
       <div className="flex items-center gap-4">
-        <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-5 py-3">
-          <div className="rounded-lg bg-violet-50 p-2 text-violet-600">
-            <CaseSensitive size={18} aria-hidden="true" />
-          </div>
-          {isLoading && !summaryData ? (
-            <Skeleton className="h-6 w-12" />
-          ) : (
-            <div>
-              <p className="text-xl font-bold text-slate-800">{totalCount}</p>
-              <p className="text-xs text-slate-500">Total abbreviations</p>
-            </div>
-          )}
-        </div>
+        <StatCard
+          icon={<CaseSensitive size={18} aria-hidden="true" />}
+          iconColor="bg-violet-50 text-violet-600"
+          value={totalCount}
+          label="Total abbreviations"
+          isLoading={isLoading && !summaryData}
+        />
       </div>
 
       {/* Search & filter bar */}
@@ -260,6 +284,31 @@ export default function AbbreviationsPage() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10">
+                  {(() => {
+                    const allOnPageSelected = abbreviations.length > 0 && abbreviations.every(a => selectedIds.has(a.id));
+                    const someOnPageSelected = abbreviations.some(a => selectedIds.has(a.id));
+                    const headerIndeterminate = someOnPageSelected && !allOnPageSelected;
+                    return (
+                      <Checkbox
+                        checked={allOnPageSelected}
+                        indeterminate={headerIndeterminate}
+                        onChange={() => {
+                          setSelectedIds((prev) => {
+                            const next = new Set(prev);
+                            if (allOnPageSelected) {
+                              abbreviations.forEach(a => next.delete(a.id));
+                            } else {
+                              abbreviations.forEach(a => next.add(a.id));
+                            }
+                            return next;
+                          });
+                        }}
+                        aria-label="Select all"
+                      />
+                    );
+                  })()}
+                </TableHead>
                 <TableHead>Code</TableHead>
                 <TableHead>Source language</TableHead>
                 <TableHead className="text-center">Linked entries</TableHead>
@@ -274,7 +323,7 @@ export default function AbbreviationsPage() {
                 <SkeletonRows />
               ) : abbreviations.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6}>
+                  <TableCell colSpan={7}>
                     <div className="flex flex-col items-center justify-center py-16 text-slate-400">
                       <FileX size={36} className="mb-3" aria-hidden="true" />
                       <p className="text-sm font-medium">No abbreviations found</p>
@@ -293,6 +342,22 @@ export default function AbbreviationsPage() {
                     className="cursor-pointer"
                     onClick={() => setEditTarget(abbr)}
                   >
+                    {/* Checkbox - stop propagation so click doesn't open edit dialog */}
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={selectedIds.has(abbr.id)}
+                        onChange={() => {
+                          setSelectedIds((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(abbr.id)) next.delete(abbr.id);
+                            else next.add(abbr.id);
+                            return next;
+                          });
+                        }}
+                        aria-label={`Select ${abbr.code}`}
+                      />
+                    </TableCell>
+
                     {/* Code */}
                     <TableCell className="font-mono font-medium text-slate-800">
                       {abbr.code}
@@ -357,11 +422,22 @@ export default function AbbreviationsPage() {
             {!isLoading && abbreviations.length > 0 && (
               <TableFooter className="bg-white border-t border-slate-200">
                 <tr>
-                  <td colSpan={6} className="p-0">
+                  <td colSpan={7} className="p-0">
                     <TableFooterBar
-                      selectedCount={0}
+                      selectedCount={selectedIds.size}
                       pageSize={pageSize}
                       onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
+                      bulkActions={
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 gap-1.5 text-red-600 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => setBulkDeleteOpen(true)}
+                        >
+                          <Trash2 size={14} aria-hidden="true" />
+                          Delete
+                        </Button>
+                      }
                     />
                   </td>
                 </tr>
@@ -412,6 +488,17 @@ export default function AbbreviationsPage() {
         confirmLabel="Delete"
         onConfirm={() => { if (deleteTarget) deleteMutation.mutate(deleteTarget.id); }}
         loading={deleteMutation.isPending}
+      />
+
+      {/* Bulk delete confirm dialog */}
+      <ConfirmDialog
+        open={bulkDeleteOpen}
+        onOpenChange={setBulkDeleteOpen}
+        title="Delete Abbreviations"
+        description={`Are you sure you want to delete ${selectedIds.size} abbreviation${selectedIds.size === 1 ? '' : 's'}? This action cannot be undone.`}
+        confirmLabel={isBulkDeleting ? 'Deleting...' : 'Delete'}
+        onConfirm={handleBulkDelete}
+        loading={isBulkDeleting}
       />
     </div>
   );

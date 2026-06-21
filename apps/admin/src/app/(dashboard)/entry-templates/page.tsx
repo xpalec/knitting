@@ -12,6 +12,7 @@ import {
   FileX,
   Layers,
   ChevronDown,
+  CircleFadingPlus,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -49,6 +50,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Pagination, TableFooterBar } from '@/components/ui/pagination';
+import { StatCard } from '@/components/ui/stat-card';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -198,26 +200,22 @@ export default function EntryTemplatesPage() {
       >
         <Button asChild className="gap-2 bg-violet-600 hover:bg-violet-700 text-white">
           <Link href="/entry-templates/new">
-            + Add Template
+            <CircleFadingPlus size={16} aria-hidden="true" />
+            Add template
           </Link>
         </Button>
       </PageHeader>
 
       {/* Stats */}
+      {/* Stats */}
       <div className="flex flex-wrap items-center gap-4">
-        <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-5 py-3">
-          <div className="rounded-lg bg-violet-50 p-2 text-violet-600">
-            <Layers size={18} aria-hidden="true" />
-          </div>
-          {isLoading ? (
-            <Skeleton className="h-6 w-12" />
-          ) : (
-            <div>
-              <p className="text-xl font-bold text-slate-800">{totalCount}</p>
-              <p className="text-xs text-slate-500">Total Templates</p>
-            </div>
-          )}
-        </div>
+        <StatCard
+          icon={<Layers size={18} aria-hidden="true" />}
+          iconColor="bg-violet-50 text-violet-600"
+          value={totalCount}
+          label="Total Templates"
+          isLoading={isLoading}
+        />
       </div>
 
       {/* Search */}

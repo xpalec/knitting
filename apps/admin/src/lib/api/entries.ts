@@ -5,6 +5,7 @@ import type { AdminCategory } from "./categories";
 import type { EntryAbbreviation, Abbreviation } from "./abbreviations";
 
 export type EntryStatus = "draft" | "review" | "published" | "deprecated";
+export type TranslationStatus = "draft" | "review" | "ready";
 export type SkillLevel = "beginner" | "intermediate" | "advanced" | "expert";
 export type EntryType = "stitch" | "technique" | "tool" | "tradition" | "yarn_weight";
 
@@ -21,7 +22,7 @@ export interface Translation {
   slug: string;
   abbreviation?: string;
   definition_short?: string;
-  status: "draft" | "reviewed" | "published";
+  status: TranslationStatus;
   metadata?: Record<string, unknown>;
   // Per-locale content for each block slot, keyed by the block's stable UUID
   blocks?: Record<string, { content?: unknown }>;
@@ -97,7 +98,7 @@ export interface UpdateTranslationPayload {
   slug?: string;
   metadata?: Record<string, unknown>;
   blocks?: Record<string, { content?: unknown }>;
-  status?: "draft" | "reviewed" | "published";
+  status?: TranslationStatus;
   translator_note?: string;
 }
 

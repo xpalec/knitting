@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Users, Plus, Search } from 'lucide-react';
+import { Users, CircleFadingPlus, Search } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { usersApi } from '@/lib/api/users';
@@ -125,8 +125,8 @@ export default function UsersPage() {
         description="Manage admin users and their roles"
       >
         <Button onClick={() => setNewUserOpen(true)} className="gap-2 bg-violet-600 hover:bg-violet-700 text-white">
-          <Plus size={16} aria-hidden="true" />
-          Add
+          <CircleFadingPlus size={16} aria-hidden="true" />
+          Add user
         </Button>
       </PageHeader>
 

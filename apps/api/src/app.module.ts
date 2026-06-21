@@ -37,6 +37,7 @@ import { AdminEntryTemplateModule } from './admin/entry-template/admin-entry-tem
 import { AdminStatsModule } from './admin/stats/admin-stats.module';
 import { AdminArticleModule } from './admin/article/admin-article.module';
 import { AdminAbbreviationModule } from './admin/abbreviation/admin-abbreviation.module';
+import { AdminEntryRelationshipModule } from './admin/entry-relationship/admin-entry-relationship.module';
 import { UserModule } from './user/user.module';
 import { MediaModule } from './media/media.module';
 
@@ -85,6 +86,7 @@ const REDIS_URL = process.env.REDIS_URL ?? 'redis://localhost:6379';
     AdminStatsModule,
     AdminArticleModule,
     AdminAbbreviationModule,
+    AdminEntryRelationshipModule,
     UserModule,
     MediaModule,
   ],

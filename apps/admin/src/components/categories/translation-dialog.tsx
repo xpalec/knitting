@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type { TranslationStatus, UpsertTranslationPayload } from '@/lib/api/categories';
+import type { CategoryTranslationStatus, UpsertTranslationPayload } from '@/lib/api/categories';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -32,7 +32,7 @@ export interface TranslationDialogProps {
     name: string;
     slug: string;
     translator_note?: string;
-    status: TranslationStatus;
+    status: CategoryTranslationStatus;
   };
   onSubmit: (payload: UpsertTranslationPayload) => void | Promise<void>;
   isSubmitting: boolean;
@@ -42,7 +42,7 @@ export interface TranslationDialogProps {
 // Constants
 // ---------------------------------------------------------------------------
 
-const STATUS_OPTIONS: { value: TranslationStatus; label: string }[] = [
+const STATUS_OPTIONS: { value: CategoryTranslationStatus; label: string }[] = [
   { value: 'draft', label: 'Draft' },
   { value: 'reviewed', label: 'Reviewed' },
   { value: 'published', label: 'Published' },
@@ -67,7 +67,7 @@ export function TranslationDialog({
   const [translatorNote, setTranslatorNote] = useState(
     initialValues?.translator_note ?? '',
   );
-  const [status, setStatus] = useState<TranslationStatus>(
+  const [status, setStatus] = useState<CategoryTranslationStatus>(
     initialValues?.status ?? 'draft',
   );
 
@@ -165,7 +165,7 @@ export function TranslationDialog({
               <Label htmlFor="translation-status">Status</Label>
               <Select
                 value={status}
-                onValueChange={(v) => setStatus(v as TranslationStatus)}
+                onValueChange={(v) => setStatus(v as CategoryTranslationStatus)}
                 disabled={isSubmitting}
               >
                 <SelectTrigger id="translation-status">

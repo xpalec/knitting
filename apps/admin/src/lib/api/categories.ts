@@ -5,7 +5,7 @@ import type { ApiResponse } from "./client";
 
 export type CategoryType = 'entry' | 'abbreviation' | 'article';
 export type CategoryStatus = 'draft' | 'published';
-export type TranslationStatus = 'draft' | 'reviewed' | 'published';
+export type CategoryTranslationStatus = 'draft' | 'reviewed' | 'published';
 
 // ─── Interfaces ───────────────────────────────────────────────────────────────
 
@@ -18,7 +18,7 @@ export interface AdminCategoryTranslation {
   seo_title?: string | null;
   seo_description?: string | null;
   translator_note?: string;
-  status: TranslationStatus;
+  status: CategoryTranslationStatus;
 }
 
 export interface AdminCategory {
@@ -68,7 +68,7 @@ export interface UpsertTranslationPayload {
   seo_title?: string;
   seo_description?: string;
   translator_note?: string;
-  status?: TranslationStatus;
+  status?: CategoryTranslationStatus;
 }
 
 // ─── Admin API client ─────────────────────────────────────────────────────────

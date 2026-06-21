@@ -22,7 +22,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Save, Trash2, X, Upload } from 'lucide-react';
-import type { CategoryType, CategoryStatus, TranslationStatus, AdminCategory } from '@/lib/api/categories';
+import type { CategoryType, CategoryStatus, CategoryTranslationStatus, AdminCategory } from '@/lib/api/categories';
 import { APP_COLORS, APP_COLOR_LIST, colorSlotFromBg } from '@/lib/colors';
 import { hasAtLeastOneCompleteLocale } from '@/lib/validation';
 import { useLanguages } from '@/hooks/useLanguages';
@@ -87,7 +87,7 @@ export interface LocaleTabState {
   description: unknown | null; // TipTap JSON or null
   seo_title: string;
   seo_description: string;
-  status: TranslationStatus;
+  status: CategoryTranslationStatus;
 }
 
 export interface CategoryFormValues {

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Globe,
-  Plus,
+  CircleFadingPlus,
   Star,
   Trash2,
   CheckCircle2,
@@ -301,7 +301,7 @@ export default function LanguagesSettingsPage() {
             className="gap-1.5 bg-violet-600 hover:bg-violet-700 text-white h-8"
             onClick={() => setAddDialogOpen(true)}
           >
-            <Plus size={14} aria-hidden="true" />
+            <CircleFadingPlus size={14} aria-hidden="true" />
             Add language
           </Button>
         </div>

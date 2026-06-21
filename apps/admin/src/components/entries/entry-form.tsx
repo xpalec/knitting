@@ -32,7 +32,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-import type { EntryStatus } from '@/lib/api/entries';
+import type { EntryStatus, TranslationStatus } from '@/lib/api/entries';
 import type { AdminCategory } from '@/lib/api/categories';
 import type { AdminTag } from '@/lib/api/tags';
 import type { EntryTemplate } from '@/lib/api/entry-templates';
@@ -49,6 +49,7 @@ import {
 } from '@/components/ui/tooltip';
 import { useLanguages } from '@/hooks/useLanguages';
 import { AbbreviationsPanel } from '@/components/abbreviations/abbreviations-panel';
+import RelationshipsPanel from './relationships-panel';
 
 // ---------------------------------------------------------------------------
 // Constants (kept for backward compatibility — dynamic list comes from store)
@@ -99,6 +100,7 @@ export interface LocaleTabState {
   seoTitle: string;
   seoDescription: string;
   synonyms: string[];
+  translationStatus: TranslationStatus;
   blocks: BlockEditorState[];
 }
 
@@ -172,6 +174,7 @@ function defaultLocaleTab(): LocaleTabState {
     seoTitle: '',
     seoDescription: '',
     synonyms: [],
+    translationStatus: 'draft',
     blocks: [],
   };
 }
@@ -333,7 +336,7 @@ function ChipInput({ label, chips, onChange, placeholder = 'Add…', disabled }:
   return (
     <div className="space-y-1.5">
       <Label className="text-sm font-medium text-slate-700">
-        {label} <span className="text-red-500">*</span>
+        {label}
       </Label>
       <div className={cn(
         'flex flex-wrap items-center gap-1.5 min-h-[38px] rounded-md border border-slate-200 bg-white px-2 py-1.5',
@@ -580,6 +583,16 @@ function LocaleTabContent({
 
   return (
     <div className="space-y-4 pt-4">
+      {/* Translation status badge */}
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-medium text-slate-500">Translation status</span>
+        <TranslationStatusPill
+          status={state.translationStatus}
+          onChange={(s) => onChange({ translationStatus: s })}
+          disabled={isSubmitting}
+        />
+      </div>
+
       {/* Title + Slug + Short description (left) / Abbreviations (right) */}
       <div className="rounded-lg border border-slate-200 bg-white p-4">
         <div className="grid grid-cols-2 gap-5 items-start">
@@ -724,6 +737,62 @@ function LocaleTabContent({
         )}
       </div>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Translation status pill with dropdown
+// ---------------------------------------------------------------------------
+
+interface TranslationStatusPillProps {
+  status: TranslationStatus;
+  onChange: (status: TranslationStatus) => void;
+  disabled?: boolean;
+}
+
+function TranslationStatusPill({ status, onChange, disabled }: TranslationStatusPillProps) {
+  const STATUS_STYLES: Record<TranslationStatus, string> = {
+    draft:  'bg-slate-100 text-slate-600 border-slate-200',
+    review: 'bg-amber-50 text-amber-700 border-amber-200',
+    ready:  'bg-green-50 text-green-700 border-green-200',
+  };
+  const STATUS_DOT: Record<TranslationStatus, string> = {
+    draft:  'bg-slate-400',
+    review: 'bg-amber-500',
+    ready:  'bg-green-500',
+  };
+  const STATUS_LABELS: Record<TranslationStatus, string> = {
+    draft:  'Draft',
+    review: 'In Review',
+    ready:  'Ready',
+  };
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          disabled={disabled}
+          className={cn(
+            'flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium border select-none',
+            'hover:opacity-80 transition-opacity',
+            STATUS_STYLES[status],
+          )}
+        >
+          <span className={cn('h-1.5 w-1.5 rounded-full', STATUS_DOT[status])} />
+          {STATUS_LABELS[status]}
+          <ChevronDown size={12} aria-hidden="true" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start">
+        {(Object.keys(STATUS_LABELS) as TranslationStatus[]).map((s) => (
+          <DropdownMenuItem key={s} onClick={() => onChange(s)}>
+            <span className={cn('h-1.5 w-1.5 rounded-full mr-2', STATUS_DOT[s])} />
+            {STATUS_LABELS[s]}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -985,6 +1054,10 @@ export function EntryForm({
             </DropdownMenuContent>
           </DropdownMenu>
 
+          <Button variant="outline" type="button" disabled>
+            Preview
+          </Button>
+
           {onCancel && (
             <Button
               variant="outline"
@@ -1077,6 +1150,7 @@ export function EntryForm({
             <TabsList variant="line" className="w-full justify-start">
               <TabsTrigger variant="line" value="details">Details</TabsTrigger>
               <TabsTrigger variant="line" value="images">Images</TabsTrigger>
+              <TabsTrigger variant="line" value="relationships">Relationships</TabsTrigger>
               <TabsTrigger variant="line" value="seo">
                 SEO <span className="font-mono text-xs text-slate-400 ml-1">{activeLocale.toUpperCase()}</span>
               </TabsTrigger>
@@ -1141,6 +1215,15 @@ export function EntryForm({
                   <p className="text-sm">Images coming soon</p>
                 </div>
               </div>
+            </TabsContent>
+
+            {/* Relationships tab */}
+            <TabsContent value="relationships" className="mt-0 pt-4">
+              <RelationshipsPanel
+                entryId={entryId}
+                activeLocale={activeLocale}
+                readOnly={isSubmitting}
+              />
             </TabsContent>
 
             {/* SEO tab */}

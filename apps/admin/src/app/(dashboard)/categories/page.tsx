@@ -40,6 +40,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { StatCard } from '@/components/ui/stat-card';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -541,48 +542,29 @@ export default function CategoriesPage() {
       </Tabs>
 
       {/* Summary stats — in bordered card boxes */}
+      {/* Summary stats */}
       <div className="flex items-center gap-4">
-        <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-5 py-3">
-          <div className="rounded-lg bg-violet-50 p-2 text-violet-600">
-            <LayoutGrid size={18} aria-hidden="true" />
-          </div>
-          {isLoading ? (
-            <Skeleton className="h-6 w-12" />
-          ) : (
-            <div>
-              <p className="text-xl font-bold text-slate-800">{summary?.total ?? '—'}</p>
-              <p className="text-xs text-slate-500">Total Categories</p>
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-5 py-3">
-          <div className="rounded-lg bg-green-50 p-2 text-green-600">
-            <BookOpen size={18} aria-hidden="true" />
-          </div>
-          {isLoading ? (
-            <Skeleton className="h-6 w-12" />
-          ) : (
-            <div>
-              <p className="text-xl font-bold text-slate-800">{summary?.entry ?? '—'}</p>
-              <p className="text-xs text-slate-500">Entry categories</p>
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-5 py-3">
-          <div className="rounded-lg bg-amber-50 p-2 text-amber-600">
-            <FileText size={18} aria-hidden="true" />
-          </div>
-          {isLoading ? (
-            <Skeleton className="h-6 w-12" />
-          ) : (
-            <div>
-              <p className="text-xl font-bold text-slate-800">0</p>
-              <p className="text-xs text-slate-500">Empty categories</p>
-            </div>
-          )}
-        </div>
+        <StatCard
+          icon={<LayoutGrid size={18} aria-hidden="true" />}
+          iconColor="bg-violet-50 text-violet-600"
+          value={summary?.total ?? '—'}
+          label="Total Categories"
+          isLoading={isLoading}
+        />
+        <StatCard
+          icon={<BookOpen size={18} aria-hidden="true" />}
+          iconColor="bg-green-50 text-green-600"
+          value={summary?.entry ?? '—'}
+          label="Entry categories"
+          isLoading={isLoading}
+        />
+        <StatCard
+          icon={<FileText size={18} aria-hidden="true" />}
+          iconColor="bg-amber-50 text-amber-600"
+          value={0}
+          label="Empty categories"
+          isLoading={isLoading}
+        />
       </div>
 
       {/* Search & filter bar */}

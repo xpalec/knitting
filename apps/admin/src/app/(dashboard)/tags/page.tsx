@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Search,
-  Plus,
+  CircleFadingPlus,
   MoreHorizontal,
   Pencil,
   Trash2,
@@ -28,6 +28,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { StatCard } from '@/components/ui/stat-card';
 import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu,
@@ -202,27 +203,22 @@ export default function TagsPage() {
       >
         <Button asChild className="gap-2 bg-violet-600 hover:bg-violet-700 text-white">
           <Link href="/tags/new">
-            <Plus size={16} aria-hidden="true" />
+            <CircleFadingPlus size={16} aria-hidden="true" />
             Add tag
           </Link>
         </Button>
       </PageHeader>
 
       {/* Stats */}
+      {/* Stats bar */}
       <div className="flex items-center gap-4">
-        <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-5 py-3">
-          <div className="rounded-lg bg-violet-50 p-2 text-violet-600">
-            <Tags size={18} aria-hidden="true" />
-          </div>
-          {isLoading ? (
-            <Skeleton className="h-6 w-12" />
-          ) : (
-            <div>
-              <p className="text-xl font-bold text-slate-800">{total}</p>
-              <p className="text-xs text-slate-500">Total Tags</p>
-            </div>
-          )}
-        </div>
+        <StatCard
+          icon={<Tags size={18} aria-hidden="true" />}
+          iconColor="bg-violet-50 text-violet-600"
+          value={total}
+          label="Total Tags"
+          isLoading={isLoading}
+        />
       </div>
 
       {/* Search */}

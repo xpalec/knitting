@@ -32,6 +32,8 @@ vi.mock('@/components/articles/cover-image-upload', () => ({
 import { describe, it, expect, vi } from 'vitest';
 import * as fc from 'fast-check';
 import { render, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { ReactElement } from 'react';
 
 import {
   ArticleEditorForm,
@@ -59,6 +61,20 @@ import type { ValidationRule } from '@/lib/validation';
 // so the suite finishes well within the 60-second per-test timeout.
 // ---------------------------------------------------------------------------
 const FC_OPTS: fc.Parameters<unknown> = { numRuns: 5 };
+
+// ---------------------------------------------------------------------------
+// Helper: render a component inside a fresh QueryClientProvider.
+// EntryForm transitively uses useQueryClient (via TagsPanel → TagCreateDialog
+// and RelationshipsPanel), so it must be wrapped.
+// ---------------------------------------------------------------------------
+function renderWithQueryClient(ui: ReactElement) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>,
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Locale label maps (needed for tab-trigger queries)
@@ -119,6 +135,7 @@ function entryLocaleState(title: string, slug: string): EntryLocaleTabState {
     seoTitle: '',
     seoDescription: '',
     synonyms: [],
+    translationStatus: 'draft',
     blocks: [],
   };
 }
@@ -291,7 +308,7 @@ describe('Feature: multilingual-content-validation, Property 3: Tab indicator co
         nonEmptyTrimmed,
         (targetLocale, title, slug) => {
           const locales = buildEntryLocales(targetLocale, title, slug);
-          const { unmount } = render(
+          const { unmount } = renderWithQueryClient(
             <EntryForm onSubmit={vi.fn()} defaultValues={{ locales }} />,
           );
 
@@ -313,7 +330,7 @@ describe('Feature: multilingual-content-validation, Property 3: Tab indicator co
         nonEmptyTrimmed,
         (targetLocale, emptyTitle, slug) => {
           const locales = buildEntryLocales(targetLocale, emptyTitle, slug);
-          const { unmount } = render(
+          const { unmount } = renderWithQueryClient(
             <EntryForm onSubmit={vi.fn()} defaultValues={{ locales }} />,
           );
 
@@ -335,7 +352,7 @@ describe('Feature: multilingual-content-validation, Property 3: Tab indicator co
         emptyOrWhitespace,
         (targetLocale, title, emptySlug) => {
           const locales = buildEntryLocales(targetLocale, title, emptySlug);
-          const { unmount } = render(
+          const { unmount } = renderWithQueryClient(
             <EntryForm onSubmit={vi.fn()} defaultValues={{ locales }} />,
           );
 
@@ -495,7 +512,7 @@ describe('Feature: multilingual-content-validation, Property 4: Inline slug help
     fc.assert(
       fc.property(nonEmptyTrimmed, (title) => {
         const locales = buildEntryLocales('en', title, '');
-        const { unmount } = render(
+        const { unmount } = renderWithQueryClient(
           <EntryForm onSubmit={vi.fn()} defaultValues={{ locales }} />,
         );
         expect(screen.queryByText(HELPER_TEXT)).toBeInTheDocument();
@@ -509,7 +526,7 @@ describe('Feature: multilingual-content-validation, Property 4: Inline slug help
     fc.assert(
       fc.property(nonEmptyTrimmed, nonEmptyTrimmed, (title, slug) => {
         const locales = buildEntryLocales('en', title, slug);
-        const { unmount } = render(
+        const { unmount } = renderWithQueryClient(
           <EntryForm onSubmit={vi.fn()} defaultValues={{ locales }} />,
         );
         expect(screen.queryByText(HELPER_TEXT)).not.toBeInTheDocument();
@@ -523,7 +540,7 @@ describe('Feature: multilingual-content-validation, Property 4: Inline slug help
     fc.assert(
       fc.property(emptyOrWhitespace, (emptyTitle) => {
         const locales = buildEntryLocales('en', emptyTitle, '');
-        const { unmount } = render(
+        const { unmount } = renderWithQueryClient(
           <EntryForm onSubmit={vi.fn()} defaultValues={{ locales }} />,
         );
         expect(screen.queryByText(HELPER_TEXT)).not.toBeInTheDocument();
@@ -652,17 +669,16 @@ describe('Feature: multilingual-content-validation, Property 5: Submit buttons d
     fc.assert(
       fc.property(emptyOrWhitespace, emptyOrWhitespace, (title, slug) => {
         const locales = buildEntryLocales('en', title, slug);
-        const { unmount } = render(
+        const { container, unmount } = renderWithQueryClient(
           <EntryForm
             onSubmit={vi.fn()}
-            onSaveDraft={vi.fn()}
             isSubmitting={false}
             defaultValues={{ locales }}
           />,
         );
 
-        expect(screen.getByRole('button', { name: /publish/i })).toBeDisabled();
-        expect(screen.getByRole('button', { name: /save draft/i })).toBeDisabled();
+        // EntryForm has a single submit button; it is disabled when no locale is complete.
+        expect(container.querySelector('button[disabled][class*="bg-violet-600"]')).not.toBeNull();
 
         unmount();
       }),
@@ -678,17 +694,18 @@ describe('Feature: multilingual-content-validation, Property 5: Submit buttons d
         nonEmptyTrimmed,
         (targetLocale, title, slug) => {
           const locales = buildEntryLocales(targetLocale, title, slug);
-          const { unmount } = render(
+          const { container, unmount } = renderWithQueryClient(
             <EntryForm
               onSubmit={vi.fn()}
-              onSaveDraft={vi.fn()}
               isSubmitting={false}
               defaultValues={{ locales }}
             />,
           );
 
-          expect(screen.getByRole('button', { name: /publish/i })).not.toBeDisabled();
-          expect(screen.getByRole('button', { name: /save draft/i })).not.toBeDisabled();
+          // When a locale is complete the Publish button is enabled.
+          const publishBtn = container.querySelector('button[class*="bg-violet-600"]');
+          expect(publishBtn).not.toBeNull();
+          expect(publishBtn).not.toBeDisabled();
 
           unmount();
         },
@@ -769,17 +786,19 @@ describe('Feature: multilingual-content-validation, Property 6: isSubmitting=tru
         nonEmptyTrimmed,
         (targetLocale, title, slug) => {
           const locales = buildEntryLocales(targetLocale, title, slug);
-          const { unmount } = render(
+          const { container, unmount } = renderWithQueryClient(
             <EntryForm
               onSubmit={vi.fn()}
-              onSaveDraft={vi.fn()}
               isSubmitting={true}
               defaultValues={{ locales }}
             />,
           );
 
-          expect(screen.getByRole('button', { name: /publishing…/i })).toBeDisabled();
-          expect(screen.getByRole('button', { name: /saving…/i })).toBeDisabled();
+          // EntryForm has a single submit button showing "Publishing…" when isSubmitting=true
+          // and no entryId (new entry). It must be disabled while submitting.
+          const publishingBtn = container.querySelector('button[class*="bg-violet-600"]');
+          expect(publishingBtn).not.toBeNull();
+          expect(publishingBtn).toBeDisabled();
 
           unmount();
         },
@@ -792,17 +811,18 @@ describe('Feature: multilingual-content-validation, Property 6: isSubmitting=tru
     fc.assert(
       fc.property(emptyOrWhitespace, emptyOrWhitespace, (title, slug) => {
         const locales = buildEntryLocales('en', title, slug);
-        const { unmount } = render(
+        const { container, unmount } = renderWithQueryClient(
           <EntryForm
             onSubmit={vi.fn()}
-            onSaveDraft={vi.fn()}
             isSubmitting={true}
             defaultValues={{ locales }}
           />,
         );
 
-        expect(screen.getByRole('button', { name: /publishing…/i })).toBeDisabled();
-        expect(screen.getByRole('button', { name: /saving…/i })).toBeDisabled();
+        // Submit button is disabled when isSubmitting=true regardless of locale completeness.
+        const publishingBtn = container.querySelector('button[class*="bg-violet-600"]');
+        expect(publishingBtn).not.toBeNull();
+        expect(publishingBtn).toBeDisabled();
 
         unmount();
       }),
@@ -876,7 +896,7 @@ describe('Feature: multilingual-content-validation, Property 11: ValidationSumma
         const locales = buildEntryLocales('en', 'My entry', 'my-entry');
         const rules = buildFailingRules<EntryFormValues>(errorMessages);
 
-        const { container, unmount } = render(
+        const { container, unmount } = renderWithQueryClient(
           <EntryForm
             onSubmit={vi.fn()}
             isSubmitting={false}
@@ -960,7 +980,7 @@ describe('Feature: multilingual-content-validation, Property 12: ValidationSumma
           const locales = buildEntryLocales(targetLocale, title, slug);
           const rules = buildPassingRules<EntryFormValues>(ruleCount);
 
-          const { unmount } = render(
+          const { unmount } = renderWithQueryClient(
             <EntryForm
               onSubmit={vi.fn()}
               isSubmitting={false}

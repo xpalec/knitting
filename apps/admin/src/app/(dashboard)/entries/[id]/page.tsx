@@ -77,6 +77,7 @@ export function mapEntryToFormValues(entry: Entry, activeLocales: string[] = [])
       seoTitle: (t?.metadata as Record<string, unknown>)?.seo_title as string ?? '',
       seoDescription: (t?.metadata as Record<string, unknown>)?.seo_description as string ?? '',
       synonyms: ((t?.metadata as Record<string, unknown>)?.synonyms as string[] | undefined) ?? [],
+      translationStatus: (t?.status ?? 'draft') as import('@/lib/api/entries').TranslationStatus,
       blocks,
     };
   }
@@ -205,6 +206,7 @@ export default function EntryEditPage({ params }: { params: Promise<{ id: string
             return entriesApi.updateTranslation(id, locale, {
               term: ls.title.trim(),
               slug: ls.slug.trim() || undefined,
+              status: ls.translationStatus,
               metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
               blocks: Object.keys(blocks).length > 0 ? blocks : undefined,
             });

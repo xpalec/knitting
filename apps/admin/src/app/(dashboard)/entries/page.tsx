@@ -10,7 +10,7 @@ import {
   FileText,
   Clock,
   Search,
-  Plus,
+  CircleFadingPlus,
   Upload,
   MoreHorizontal,
   Pencil,
@@ -36,6 +36,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { StatCard } from '@/components/ui/stat-card';
 import {
   Select,
   SelectContent,
@@ -525,81 +526,43 @@ export default function EntriesPage() {
         </Button>
         <Button asChild className="gap-2 bg-violet-600 hover:bg-violet-700 text-white">
           <Link href="/entries/new">
-            <Plus size={16} aria-hidden="true" />
-            Add
+            <CircleFadingPlus size={16} aria-hidden="true" />
+            Add entry
           </Link>
         </Button>
       </PageHeader>
 
       {/* Summary stat cards */}
+      {/* Summary stat cards */}
       <div className="flex items-center gap-4">
-        {/* Total entries */}
-        <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-5 py-3">
-          <div className="rounded-lg bg-violet-50 p-2 text-violet-600">
-            <BookOpen size={18} aria-hidden="true" />
-          </div>
-          {summaryQueries[0].isLoading ? (
-            <Skeleton className="h-6 w-12" />
-          ) : (
-            <div>
-              <p className="text-xl font-bold text-slate-800">
-                {summaryQueries[0].isError ? '-' : (summaryQueries[0].data?.meta?.total ?? '-')}
-              </p>
-              <p className="text-xs text-slate-500">Total entries</p>
-            </div>
-          )}
-        </div>
-
-        {/* Published */}
-        <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-5 py-3">
-          <div className="rounded-lg bg-green-50 p-2 text-green-600">
-            <CheckCircle size={18} aria-hidden="true" />
-          </div>
-          {summaryQueries[1].isLoading ? (
-            <Skeleton className="h-6 w-12" />
-          ) : (
-            <div>
-              <p className="text-xl font-bold text-slate-800">
-                {summaryQueries[1].isError ? '-' : (summaryQueries[1].data?.meta?.total ?? '-')}
-              </p>
-              <p className="text-xs text-slate-500">Published</p>
-            </div>
-          )}
-        </div>
-
-        {/* Drafts */}
-        <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-5 py-3">
-          <div className="rounded-lg bg-slate-100 p-2 text-slate-600">
-            <FileText size={18} aria-hidden="true" />
-          </div>
-          {summaryQueries[2].isLoading ? (
-            <Skeleton className="h-6 w-12" />
-          ) : (
-            <div>
-              <p className="text-xl font-bold text-slate-800">
-                {summaryQueries[2].isError ? '-' : (summaryQueries[2].data?.meta?.total ?? '-')}
-              </p>
-              <p className="text-xs text-slate-500">Drafts</p>
-            </div>
-          )}
-        </div>
-
-        {/* Needs review */}
-        <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-5 py-3">
-          <div className="rounded-lg bg-amber-50 p-2 text-amber-600">
-            <Clock size={18} aria-hidden="true" />
-          </div>
-          {summaryQueries[3].isLoading ? (
-            <Skeleton className="h-6 w-12" />
-          ) : (
-            <div>
-              <p className="text-xl font-bold text-slate-800">
-                {summaryQueries[3].isError ? '-' : (summaryQueries[3].data?.meta?.total ?? '-')}
-              </p>
-              <p className="text-xs text-slate-500">Needs review</p>
-            </div>
-          )}
-        </div>
+        <StatCard
+          icon={<BookOpen size={18} aria-hidden="true" />}
+          iconColor="bg-violet-50 text-violet-600"
+          value={summaryQueries[0].isError ? '-' : (summaryQueries[0].data?.meta?.total ?? '-')}
+          label="Total entries"
+          isLoading={summaryQueries[0].isLoading}
+        />
+        <StatCard
+          icon={<CheckCircle size={18} aria-hidden="true" />}
+          iconColor="bg-green-50 text-green-600"
+          value={summaryQueries[1].isError ? '-' : (summaryQueries[1].data?.meta?.total ?? '-')}
+          label="Published"
+          isLoading={summaryQueries[1].isLoading}
+        />
+        <StatCard
+          icon={<FileText size={18} aria-hidden="true" />}
+          iconColor="bg-slate-100 text-slate-600"
+          value={summaryQueries[2].isError ? '-' : (summaryQueries[2].data?.meta?.total ?? '-')}
+          label="Drafts"
+          isLoading={summaryQueries[2].isLoading}
+        />
+        <StatCard
+          icon={<Clock size={18} aria-hidden="true" />}
+          iconColor="bg-amber-50 text-amber-600"
+          value={summaryQueries[3].isError ? '-' : (summaryQueries[3].data?.meta?.total ?? '-')}
+          label="Needs review"
+          isLoading={summaryQueries[3].isLoading}
+        />
       </div>
 
       {/* Status tabs */}

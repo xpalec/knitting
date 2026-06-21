@@ -1,7 +1,7 @@
 import { Check, AlertCircle, Minus } from 'lucide-react';
-import type { TranslationStatus } from '@/lib/api/content-block-types';
+import type { BlockTypeTranslationStatus } from '@/lib/api/content-block-types';
 
-const STATUS_CONFIG: Record<TranslationStatus, {
+const STATUS_CONFIG: Record<BlockTypeTranslationStatus, {
   icon: React.ElementType;
   label: string;
   className: string;
@@ -12,7 +12,7 @@ const STATUS_CONFIG: Record<TranslationStatus, {
 };
 
 interface TranslationStatusBadgeProps {
-  status: TranslationStatus;
+  status: BlockTypeTranslationStatus;
 }
 
 export function TranslationStatusBadge({ status }: TranslationStatusBadgeProps) {

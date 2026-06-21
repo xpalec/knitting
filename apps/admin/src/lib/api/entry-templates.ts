@@ -55,12 +55,12 @@ export interface UpdateEntryTemplatePayload {
 // Translation status
 // ---------------------------------------------------------------------------
 
-export type TranslationStatus = 'complete' | 'incomplete' | 'missing';
+export type TemplateTranslationStatus = 'complete' | 'incomplete' | 'missing';
 
 export function deriveTemplateTranslationStatus(
   template: Pick<EntryTemplate, 'blocks' | 'translations'>,
   locale: Locale,
-): TranslationStatus {
+): TemplateTranslationStatus {
   if (template.blocks.length === 0) return 'missing';
 
   const hasAny = template.blocks.some(

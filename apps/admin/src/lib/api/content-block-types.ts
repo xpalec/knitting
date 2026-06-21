@@ -27,7 +27,7 @@ export const BLOCK_TYPE_OPTIONS: { value: string; label: string }[] = [
   { value: "pattern",     label: "Pattern usage" },
 ];
 
-export type TranslationStatus = "complete" | "incomplete" | "missing";
+export type BlockTypeTranslationStatus = "complete" | "incomplete" | "missing";
 
 export interface ContentBlockTypeTranslation {
   heading: string;
@@ -69,7 +69,7 @@ export interface UpsertTranslationPayload {
 export function deriveTranslationStatus(
   blockType: ContentBlockType,
   locale: Locale,
-): TranslationStatus {
+): BlockTypeTranslationStatus {
   const translation = blockType.translations[locale];
   if (!translation) return "missing";
   if (translation.heading && translation.heading.length > 0) return "complete";
