@@ -35,15 +35,17 @@ async function bootstrap() {
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
-  // Swagger
-  const config = new DocumentBuilder()
-    .setTitle('Knitting Encyclopedia API')
-    .setDescription('European Knitting Encyclopedia — REST API')
-    .setVersion('1.0')
-    .addCookieAuth('access_token')
-    .build();
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document);
+  // Swagger — only enabled outside production
+  if (process.env.NODE_ENV !== 'production') {
+    const config = new DocumentBuilder()
+      .setTitle('Knitting Encyclopedia API')
+      .setDescription('European Knitting Encyclopedia — REST API')
+      .setVersion('1.0')
+      .addCookieAuth('access_token')
+      .build();
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('api/docs', app, document);
+  }
 
   const port = process.env.PORT ?? 3002;
   await app.listen(port);

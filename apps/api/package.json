@@ -9,7 +9,7 @@
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
-    "db:seed": "ts-node --project tsconfig.json -e \"require('dotenv/config')\" prisma/seed.ts",
+    "db:seed": "ts-node --project tsconfig.json prisma/seed.ts",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "dev": "nest start --watch",

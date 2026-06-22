@@ -9,7 +9,7 @@ import 'dotenv/config';
 import * as bcrypt from 'bcrypt';
 import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient } from '../src/generated/prisma/client';
+import { PrismaClient, TranslationStatus, CategoryStatus, EntryStatus } from '../src/generated/prisma/client';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const adapter = new PrismaPg(pool);
@@ -61,7 +61,7 @@ async function main() {
   // Helper: upsert a translation by its unique (locale, slug)
   async function upsertTranslation(data: {
     entry_id: string; locale: string; slug: string; term: string;
-    metadata: object; blocks: object; status: string;
+    metadata: object; blocks: object; status: TranslationStatus;
   }) {
     await prisma.translation.upsert({
       where: { locale_slug: { locale: data.locale, slug: data.slug } },
@@ -95,7 +95,7 @@ async function main() {
   // Entry 1 — Yarn Over (en origin)
   const yoId = await upsertEntry('yarn-over', {
     origin_language: 'en',
-    status: 'published',
+    status: EntryStatus.published,
     metadata: { skill_level: 'beginner', definition_short: 'Wrap yarn over the needle to create a new stitch.' },
     content_blocks: [
       blk('yo-def', 'definition', 1),
@@ -112,7 +112,7 @@ async function main() {
         'yo-tech': steps('Basic Yarn Over', 'beginner', ['Bring yarn to the front between the needles.', 'Wrap yarn over the right needle from front to back.', 'Continue knitting — the wrap becomes a new stitch.']),
         'yo-callout': { text: 'US "yo" = UK "yfwd" (yarn forward). Same action, different name.' },
       },
-      status: 'published' },
+      status: TranslationStatus.reviewed },
     { entry_id: '', locale: 'pl', slug: 'nawijak', term: 'Nawijak',
       metadata: { abbreviation: 'nw', definition_short: 'Owinięcie nitki wokół drutów tworzące nowe oczko.' },
       blocks: {
@@ -120,13 +120,13 @@ async function main() {
         'yo-tech': steps('Podstawowy nawijak', 'beginner', ['Przesuń nitkę na przód między drutami.', 'Owiń nitkę wokół prawego drutu od przodu do tyłu.', 'Kontynuuj robótkę — owinięcie staje się nowym oczkiem.']),
         'yo-callout': { text: 'Angielskie "yo" odpowiada brytyjskiemu "yfwd". Ta sama czynność, inna nazwa.' },
       },
-      status: 'published' },
+      status: TranslationStatus.reviewed },
   ]);
 
   // Entry 2 — Knit Two Together (en origin)
   const k2togId = await upsertEntry('knit-two-together', {
     origin_language: 'en',
-    status: 'published',
+    status: EntryStatus.published,
     metadata: { skill_level: 'beginner', definition_short: 'Knit two stitches together as one to decrease stitch count.' },
     content_blocks: [
       blk('k2tog-def', 'definition', 1),
@@ -141,20 +141,20 @@ async function main() {
         'k2tog-def': doc('K2tog is a right-leaning decrease — insert the needle through two stitches simultaneously and knit them as one.'),
         'k2tog-tech': steps('K2tog', 'beginner', ['Insert right needle knitwise through the next two stitches.', 'Wrap yarn and pull through both stitches.', 'Slip both stitches off the left needle.']),
       },
-      status: 'published' },
+      status: TranslationStatus.reviewed },
     { entry_id: '', locale: 'pl', slug: 'dwa-razem', term: 'Dwa razem',
       metadata: { abbreviation: '2r', definition_short: 'Zdzierganie dwóch oczek razem jako jedno zmniejszenie.' },
       blocks: {
         'k2tog-def': doc('Dwa razem (2r) to zmniejszenie pochylone w prawo — wkłada się drut przez dwa oczka jednocześnie i zdzierguje je jako jedno.'),
         'k2tog-tech': steps('Dwa razem', 'beginner', ['Wsuń prawy drut przez dwa kolejne oczka na lewym drucie.', 'Owiń nitkę i przeciągnij przez oba oczka.', 'Zdejmij oba oczka z lewego drutu.']),
       },
-      status: 'published' },
+      status: TranslationStatus.reviewed },
   ]);
 
   // Entry 3 — Brioche Stitch (pl origin)
   const briocheId = await upsertEntry('brioche-stitch', {
     origin_language: 'pl',
-    status: 'published',
+    status: EntryStatus.published,
     metadata: { skill_level: 'intermediate', definition_short: 'A reversible rib stitch with a distinctive squishy texture.' },
     content_blocks: [
       blk('br-def', 'definition', 1),
@@ -171,7 +171,7 @@ async function main() {
         'br-tech': steps('One-Colour Brioche', 'intermediate', ['Set-up row: *sl1yo, k1; repeat from *.', 'Every row: *brk, sl1yo; repeat from *.']),
         'br-callout': { text: 'Brioche uses ~50% more yarn than stockinette — swatch before buying yarn.' },
       },
-      status: 'published' },
+      status: TranslationStatus.reviewed },
     { entry_id: '', locale: 'pl', slug: 'scieg-brioche', term: 'Ścieg brioche',
       metadata: { abbreviation: 'br', definition_short: 'Dwustronny ścieg żebrowy o charakterystycznej puszystej fakturze.' },
       blocks: {
@@ -179,7 +179,7 @@ async function main() {
         'br-tech': steps('Jednokolorowe brioche', 'intermediate', ['Rząd przygotowawczy: *przesuń 1 z nawijakiem, 1 prawe; powtarzaj od *.', 'Każdy rząd: *brk, przesuń 1 z nawijakiem; powtarzaj od *.']),
         'br-callout': { text: 'Brioche zużywa ok. 50% więcej nitki niż ścieg gładki — zrób próbkę przed zakupem włóczki.' },
       },
-      status: 'published' },
+      status: TranslationStatus.reviewed },
   ]);
 
   console.log('  3 Entry rows, 6 Translation rows');
@@ -222,12 +222,12 @@ async function main() {
   for (let i = 0; i < CATEGORIES.length; i++) {
     const cat = CATEGORIES[i];
     const category = await prisma.category.create({
-      data: { type: 'entry', sort_order: i, status: 'published' },
+      data: { type: 'entry', sort_order: i, status: CategoryStatus.published },
     });
     await prisma.categoryTranslation.createMany({
       data: [
-        { category_id: category.id, locale: 'en', slug: cat.slug_en, name: cat.name_en, status: 'published' },
-        { category_id: category.id, locale: 'pl', slug: cat.slug_pl, name: cat.name_pl, status: 'published' },
+        { category_id: category.id, locale: 'en', slug: cat.slug_en, name: cat.name_en, status: TranslationStatus.reviewed },
+        { category_id: category.id, locale: 'pl', slug: cat.slug_pl, name: cat.name_pl, status: TranslationStatus.reviewed },
       ],
     });
   }
@@ -264,7 +264,7 @@ async function main() {
       await prisma.tagTranslation.upsert({
         where: { tag_id_locale: { tag_id: tagId, locale } },
         update: { name, slug },
-        create: { tag_id: tagId, locale, name, slug, status: 'published' },
+        create: { tag_id: tagId, locale, name, slug, status: TranslationStatus.reviewed },
       });
     }
   }
@@ -290,7 +290,7 @@ async function main() {
       },
     });
   }
-  console.log(`  ${USERS.length} User rows (admin@knitting.local / admin123, editor@knitting.local / editor123)`);
+  console.log(`  ${USERS.length} User rows (admin@knitting / admin123, editor@knitting.local / editor123)`);
 
   console.log('Done.');
 }
@@ -299,6 +299,7 @@ async function main() {
 // Users
 // ---------------------------------------------------------------------------
 const USERS = [
+  { email: 'admin@knitovia.com',  name: 'Admin',        role: 'admin',    password: 'pass123' },
   { email: 'admin@knitting.local',  name: 'Admin',        role: 'admin',    password: 'admin123' },
   { email: 'editor@knitting.local', name: 'Editor',       role: 'editor',   password: 'editor123' },
 ];
