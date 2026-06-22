@@ -14,16 +14,16 @@ export function proxy(request: NextRequest) {
     pathname === '/favicon.ico'
   ) {
     // If authenticated user visits /login, redirect to dashboard
-    const token = request.cookies.get('access_token');
-    if (token && pathname === '/login') {
+    const session = request.cookies.get('session');
+    if (session && pathname === '/login') {
       return NextResponse.redirect(new URL('/dashboard', request.url));
     }
     return NextResponse.next();
   }
 
-  // Check for auth cookie
-  const token = request.cookies.get('access_token');
-  if (!token) {
+  // Check for local session cookie (set by /api/auth/session after login)
+  const session = request.cookies.get('session');
+  if (!session) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('from', pathname);
     return NextResponse.redirect(loginUrl);
@@ -34,6 +34,6 @@ export function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webpo)$).*)',
   ],
 };

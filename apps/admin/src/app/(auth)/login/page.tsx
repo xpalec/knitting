@@ -44,6 +44,9 @@ export default function LoginPage() {
       const u = meBody.data;
       setUser({ id: u.id, email: u.email, role: u.role });
 
+      // Set a local session cookie so Next.js middleware can verify auth
+      await fetch('/api/auth/session', { method: 'POST' });
+
       router.push('/dashboard');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Invalid credentials');

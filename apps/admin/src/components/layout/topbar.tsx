@@ -27,6 +27,8 @@ export function Topbar() {
     } catch {
       // ignore — clear local state regardless
     }
+    // Clear the local session cookie
+    await fetch('/api/auth/session', { method: 'DELETE' }).catch(() => {});
     clearUser();
     router.push('/login');
     toast.success('Signed out');
