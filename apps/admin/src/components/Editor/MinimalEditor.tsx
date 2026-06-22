@@ -145,7 +145,7 @@ function BlockSelect({ editor }: { editor: Editor }) {
     if (value === 'paragraph') {
       editor.chain().focus().setParagraph().run();
     } else {
-      const level = parseInt(value[1]) as 1 | 2 | 3 | 4;
+      const level = parseInt(value[1]!) as 1 | 2 | 3 | 4;
       editor.chain().focus().toggleHeading({ level }).run();
     }
   }
