@@ -34,11 +34,18 @@ async function request<T>(
 ): Promise<T> {
   const url = `${API_BASE}${path}`;
 
+  // Don't set Content-Type for FormData — the browser sets it with the correct
+  // multipart boundary automatically. For everything else default to JSON.
+  const isFormData = options.body instanceof FormData;
+  const defaultHeaders: Record<string, string> = isFormData
+    ? {}
+    : { "Content-Type": "application/json" };
+
   const response = await fetch(url, {
     ...options,
     credentials: "include",
     headers: {
-      "Content-Type": "application/json",
+      ...defaultHeaders,
       ...options.headers,
     },
   });
@@ -79,11 +86,16 @@ async function requestWithMeta<T>(
 ): Promise<ApiResponse<T>> {
   const url = `${API_BASE}${path}`;
 
+  const isFormData = options.body instanceof FormData;
+  const defaultHeaders: Record<string, string> = isFormData
+    ? {}
+    : { "Content-Type": "application/json" };
+
   const response = await fetch(url, {
     ...options,
     credentials: "include",
     headers: {
-      "Content-Type": "application/json",
+      ...defaultHeaders,
       ...options.headers,
     },
   });

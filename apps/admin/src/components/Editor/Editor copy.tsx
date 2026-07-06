@@ -42,6 +42,7 @@ import { Highlight, RichTextHighlight } from 'reactjs-tiptap-editor/highlight';
 import { History, RichTextRedo, RichTextUndo } from 'reactjs-tiptap-editor/history';
 import { HorizontalRule, RichTextHorizontalRule } from 'reactjs-tiptap-editor/horizontalrule';
 import { Iframe, RichTextIframe } from 'reactjs-tiptap-editor/iframe';
+import { Image, RichTextImage } from 'reactjs-tiptap-editor/image';
 import { ImportWord, RichTextImportWord } from 'reactjs-tiptap-editor/importword';
 import { Indent, RichTextIndent } from 'reactjs-tiptap-editor/indent';
 import { Italic, RichTextItalic } from 'reactjs-tiptap-editor/italic';
@@ -65,6 +66,7 @@ import {
   RichTextBubbleDrawer,
   RichTextBubbleExcalidraw,
   RichTextBubbleIframe,
+  RichTextBubbleImage,
   RichTextBubbleLink,
   RichTextBubbleMenuDragHandle,
   RichTextBubbleTable,
@@ -74,8 +76,6 @@ import {
 import 'reactjs-tiptap-editor/style.css';
 
 import { EditorContent, useEditor } from '@tiptap/react';
-import { SmartImage, SmartImageInsertButton } from './extensions/smart-image'
-import { uploadImage } from './extensions/uploadImage'
 import './editor.css';
 import './extensions/smart-image/smart-image.css'
 
@@ -186,7 +186,23 @@ async function uploadForEntity(
   return asset.url_medium ?? asset.url_original;
 }
 
+// ---------------------------------------------------------------------------
+// LightboxImage — extends the Image node with a data-lightbox attribute
+// ---------------------------------------------------------------------------
 
+const LightboxImage = Image.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      'data-lightbox': {
+        default: null,
+        parseHTML: (el: Element) => el.getAttribute('data-lightbox'),
+        renderHTML: (attrs: Record<string, unknown>) =>
+          attrs['data-lightbox'] ? { 'data-lightbox': attrs['data-lightbox'] } : {},
+      },
+    };
+  },
+});
 
 // ---------------------------------------------------------------------------
 // Extensions
@@ -230,6 +246,10 @@ const buildExtensions = (placeholder: string, upload: (file: File) => Promise<st
   LineHeight,
   TaskList,
   Link,
+  LightboxImage.configure({
+    HTMLAttributes: { class: 'content-image' },
+    upload,
+  }),
   Video.configure({
     upload: (file: File) =>
       new Promise((resolve) => {
@@ -271,26 +291,13 @@ const buildExtensions = (placeholder: string, upload: (file: File) => Promise<st
   }),
   SlashCommand,
   Callout,
-  SmartImage.configure({
-    upload: uploadImage,
-    maxFileSize: 10 * 1024 * 1024,
-    minWidth: 160,
-    maxWidth: 860,
-    defaultWidth: null,
-    defaultAlign: 'center',
-    defaultClickAction: 'lightbox',
-    enablePasteUpload: true,
-    enableDropUpload: true,
-    useSrcAsLightboxFallback: true,
-    onError: error => console.error(error),
-  }),
 ];
 
 // ---------------------------------------------------------------------------
 // Toolbar
 // ---------------------------------------------------------------------------
 
-function RichTextToolbar({ editor }) {
+function RichTextToolbar() {
   return (
     <div className="flex items-center !p-1 gap-2 flex-wrap !border-b !border-solid !border-border">
       <RichTextUndo />
@@ -314,6 +321,7 @@ function RichTextToolbar({ editor }) {
       <RichTextLineHeight />
       <RichTextTaskList />
       <RichTextLink />
+      <RichTextImage />
       <RichTextVideo />
       <RichTextBlockquote />
       <RichTextHorizontalRule />
@@ -326,7 +334,6 @@ function RichTextToolbar({ editor }) {
       <RichTextTextDirection />
       <RichTextAttachment />
       <RichTextCallout />
-      <SmartImageInsertButton editor={editor} />
     </div>
   );
 }
@@ -335,6 +342,79 @@ function RichTextToolbar({ editor }) {
 // LightboxBar — floats below a selected image to set/clear the lightbox URL.
 // We track selection manually (no BubbleMenu component needed).
 // ---------------------------------------------------------------------------
+
+interface LightboxBarProps {
+  editor: ReturnType<typeof useEditor>;
+  /** Whether an imageUpload node is currently selected */
+  imageSelected: boolean;
+}
+
+function LightboxBar({ editor, imageSelected }: LightboxBarProps) {
+  if (!editor || !imageSelected) return null;
+
+  const attrs = editor.getAttributes('imageUpload');
+  const currentLightbox: string = attrs['data-lightbox'] ?? '';
+
+  function handleSet() {
+    const url = window.prompt(
+      'Lightbox URL — the full-size original shown in the lightbox:',
+      currentLightbox,
+    );
+    if (url === null) return; // cancelled
+    editor
+      .chain()
+      .focus()
+      .updateAttributes('imageUpload', { 'data-lightbox': url || null })
+      .run();
+  }
+
+  function handleClear() {
+    editor
+      .chain()
+      .focus()
+      .updateAttributes('imageUpload', { 'data-lightbox': null })
+      .run();
+  }
+
+  return (
+    <div className="flex items-center gap-1 px-2 py-1.5 border-t border-slate-100 bg-slate-50">
+      <span className="text-xs text-slate-500 mr-1">Lightbox:</span>
+      <button
+        type="button"
+        onClick={handleSet}
+        title={currentLightbox ? 'Change lightbox URL' : 'Set original-size URL for lightbox'}
+        className={[
+          'flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium transition-colors',
+          currentLightbox
+            ? 'bg-violet-100 text-violet-700 hover:bg-violet-200'
+            : 'text-slate-600 border border-slate-200 hover:bg-white',
+        ].join(' ')}
+      >
+        <Link2 size={12} aria-hidden="true" />
+        {currentLightbox ? 'Edit URL ✓' : 'Set URL'}
+      </button>
+      {currentLightbox && (
+        <button
+          type="button"
+          onClick={handleClear}
+          title="Remove lightbox URL"
+          className="flex items-center gap-1 rounded px-2 py-0.5 text-xs text-slate-500 border border-slate-200 hover:bg-white transition-colors"
+        >
+          <ImageOff size={12} aria-hidden="true" />
+          Clear
+        </button>
+      )}
+      {currentLightbox && (
+        <span
+          className="ml-1 text-xs text-slate-400 truncate max-w-[200px]"
+          title={currentLightbox}
+        >
+          {currentLightbox}
+        </span>
+      )}
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Main component
@@ -459,8 +539,12 @@ export default function Editor({
     <div className="rte-wrapper overflow-hidden rounded-[0.5rem] bg-background !border !border-border">
       <RichTextProvider editor={editor}>
         <div className="flex max-h-full w-full flex-col">
-          <RichTextToolbar editor={editor} />
+          <RichTextToolbar />
+
           <EditorContent editor={editor} />
+
+          {/* Lightbox URL bar — appears below editor when an image is selected */}
+          <LightboxBar editor={editor} imageSelected={imageSelected} />
 
           {/* Bubble menus */}
           <RichTextBubbleColumns />
@@ -468,6 +552,7 @@ export default function Editor({
           <RichTextBubbleExcalidraw />
           <RichTextBubbleIframe />
           <RichTextBubbleLink />
+          <RichTextBubbleImage />
           <RichTextBubbleVideo />
           <RichTextBubbleTable />
           <RichTextBubbleText />

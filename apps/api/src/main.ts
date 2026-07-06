@@ -4,10 +4,15 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
+import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Increase body size limit for file uploads (10 MB + headroom)
+  app.use(json({ limit: '11mb' }));
+  app.use(urlencoded({ limit: '11mb', extended: true }));
 
   // Cookie parser (required for JWT HttpOnly cookie)
   app.use(cookieParser());

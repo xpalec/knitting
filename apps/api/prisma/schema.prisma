@@ -109,7 +109,6 @@ model Entry {
 
   entry_template    EntryTemplate? @relation(fields: [entry_template_id], references: [id], onDelete: SetNull)
   translations      Translation[]
-  media_assets      MediaAsset[]
   pattern_usage     PatternUsage[]
   categories        EntryCategory[]
   tags              EntryTag[]
@@ -348,19 +347,33 @@ model EntryRelationship {
 
 // ---------------------------------------------------------------------------
 // MediaAsset
-// CDN URL is locale-independent. Alt text and caption live in Translation.blocks.
+// Stores uploaded image variants for any content entity (polymorphic association).
 // ---------------------------------------------------------------------------
 
 model MediaAsset {
-  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  entry_id   String    @db.Uuid
-  type       MediaType
-  /// CDN URL (Cloudflare R2) — locale-independent
-  url        String
-  sort_order Int       @default(0)
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
 
-  entry Entry @relation(fields: [entry_id], references: [id], onDelete: Cascade)
+  // Polymorphic association
+  source_id    String    @db.Uuid
+  source_type  String    @db.VarChar(50)   // "entry" | "article"
 
+  // Variant URLs
+  url_original String
+  url_medium   String?
+  url_small    String?
+
+  // Metadata
+  alt_text     String?   @db.VarChar(500)
+  filename     String    @db.VarChar(255)
+
+  // Legacy / compatibility
+  type         MediaType
+  sort_order   Int       @default(0)
+
+  created_at   DateTime  @default(now()) @db.Timestamptz
+  updated_at   DateTime  @updatedAt @db.Timestamptz
+
+  @@index([source_type, source_id])
   @@map("media_asset")
 }
 

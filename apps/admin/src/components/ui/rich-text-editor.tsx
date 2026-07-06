@@ -20,6 +20,10 @@ export interface RichTextEditorProps extends EditorProps {
   showCharacterCount?: boolean;
   /** Kept for backward compatibility — ignored */
   maxCharacters?: number;
+  /** When provided, editor image uploads are linked to this entity (Option B) */
+  sourceType?: 'entry' | 'article';
+  /** When provided together with sourceType, uploads are stored as MediaAsset records */
+  sourceId?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -46,6 +50,8 @@ export function RichTextEditor({
   placeholder,
   disabled,
   className,
+  sourceType,
+  sourceId,
   // backward-compat props — intentionally unused
   showCharacterCount: _showCharacterCount,
   maxCharacters: _maxCharacters,
@@ -57,6 +63,8 @@ export function RichTextEditor({
       placeholder={placeholder}
       disabled={disabled}
       className={className}
+      sourceType={sourceType}
+      sourceId={sourceId}
     />
   );
 }

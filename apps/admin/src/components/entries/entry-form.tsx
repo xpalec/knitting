@@ -50,6 +50,7 @@ import {
 import { useLanguages } from '@/hooks/useLanguages';
 import { AbbreviationsPanel } from '@/components/abbreviations/abbreviations-panel';
 import RelationshipsPanel from './relationships-panel';
+import { ImagesTab } from '@/components/media/images-tab';
 
 // ---------------------------------------------------------------------------
 // Constants (kept for backward compatibility — dynamic list comes from store)
@@ -411,9 +412,11 @@ interface BlockRowProps {
   isSubmitting?: boolean;
   onChange: (patch: Partial<BlockEditorState>) => void;
   onRemove: () => void;
+  /** Entry ID for entity-aware image uploads (Optional B) */
+  entryId?: string;
 }
 
-function BlockRow({ block, blockTypes, isSubmitting, onChange, onRemove }: BlockRowProps) {
+function BlockRow({ block, blockTypes, isSubmitting, onChange, onRemove, entryId }: BlockRowProps) {
   const [expanded, setExpanded] = useState(true);
 
   // Resolve registered block type for label + color
@@ -539,6 +542,8 @@ function BlockRow({ block, blockTypes, isSubmitting, onChange, onRemove }: Block
             onChange={(json) => onChange({ content: json })}
             placeholder="Write content…"
             disabled={isSubmitting}
+            sourceType={entryId ? 'entry' : undefined}
+            sourceId={entryId}
           />
         </div>
       )}
@@ -721,6 +726,7 @@ function LocaleTabContent({
                 block={block}
                 blockTypes={contentBlockTypes}
                 isSubmitting={isSubmitting}
+                entryId={entryId}
                 onChange={(patch) =>
                   onChange({
                     blocks: state.blocks.map((b) =>
@@ -1209,12 +1215,13 @@ export function EntryForm({
 
             {/* Images tab */}
             <TabsContent value="images" className="mt-0 pt-4">
-              <div className="rounded-lg border border-slate-200 bg-white p-4">
-                <div className="flex flex-col items-center justify-center py-10 text-slate-400 gap-2">
-                  <Upload size={28} aria-hidden="true" />
-                  <p className="text-sm">Images coming soon</p>
+              {entryId ? (
+                <ImagesTab sourceType="entry" sourceId={entryId} />
+              ) : (
+                <div className="rounded-lg border border-dashed border-slate-200 p-6 text-center text-sm text-slate-400">
+                  Save the entry first to upload images.
                 </div>
-              </div>
+              )}
             </TabsContent>
 
             {/* Relationships tab */}

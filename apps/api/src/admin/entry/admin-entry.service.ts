@@ -7,6 +7,7 @@ import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Inject } from '@nestjs/common';
 import type { Cache } from 'cache-manager';
 import { PrismaService } from '../../prisma/prisma.service';
+import { MediaService } from '../../media/media.service';
 import { CreateEntryDto } from './dto/create-entry.dto';
 import { PatchStatusDto } from './dto/patch-status.dto';
 import { UpdateEntryDto } from './dto/update-entry.dto';
@@ -16,6 +17,7 @@ import { UpsertTranslationDto } from './dto/upsert-translation.dto';
 export class AdminEntryService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly mediaService: MediaService,
     @Inject(CACHE_MANAGER) private readonly cache: Cache,
   ) {}
 
@@ -187,7 +189,6 @@ export class AdminEntryService {
       include: {
         entry_template: { select: { id: true, name: true, blocks: true, translations: true } },
         translations: true,
-        media_assets: { orderBy: { sort_order: 'asc' } },
         pattern_usage: true,
         categories: { include: { category: true } },
         related_from: {
@@ -346,6 +347,7 @@ export class AdminEntryService {
   async hardDelete(id: string) {
     await this.assertExists(id);
     await this.invalidateCacheForEntry(id);
+    await this.mediaService.deleteAssetsForEntity('entry', id);
     await this.prisma.entry.delete({ where: { id } });
     return { data: { id } };
   }

@@ -265,6 +265,7 @@ export default function EditArticlePage({ params }: { params: Promise<{ id: stri
           onCancel={() => router.push('/articles')}
           onDelete={() => setDeleteDialogOpen(true)}
           title={articleTitle}
+          articleId={id}
         />
       </div>
 

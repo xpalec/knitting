@@ -21,6 +21,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { CoverImageUpload } from '@/components/articles/cover-image-upload';
+import { ImagesTab } from '@/components/media/images-tab';
 import {
   Tooltip,
   TooltipContent,
@@ -112,6 +113,7 @@ export interface ArticleEditorFormProps {
   onDelete?: () => void;
   title?: string;
   validationRules?: ValidationRule<ArticleEditorFormValues>[];
+  articleId?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -206,9 +208,11 @@ interface BlockRowProps {
   isSubmitting?: boolean;
   onChange: (patch: Partial<ArticleBlockState>) => void;
   onRemove: () => void;
+  /** Article ID for entity-aware image uploads */
+  articleId?: string;
 }
 
-function BlockRow({ block, activeLocale, isSubmitting, onChange, onRemove }: BlockRowProps) {
+function BlockRow({ block, activeLocale, isSubmitting, onChange, onRemove, articleId }: BlockRowProps) {
   const [expanded, setExpanded] = useState(true);
   const typeColor = BLOCK_TYPE_COLORS[block.type] ?? BLOCK_TYPE_FALLBACK;
   const localeData = block.locales[activeLocale] ?? { heading: '', content: null };
@@ -332,6 +336,8 @@ function BlockRow({ block, activeLocale, isSubmitting, onChange, onRemove }: Blo
             onChange={(json) => patchLocale({ content: json })}
             placeholder="Write content…"
             disabled={isSubmitting}
+            sourceType={articleId ? 'article' : undefined}
+            sourceId={articleId}
           />
         </div>
       )}
@@ -350,6 +356,7 @@ interface LocaleTabContentProps {
   isSubmitting: boolean;
   onLocaleChange: (patch: Partial<ArticleLocaleTabState>) => void;
   onBlocksChange: (blocks: ArticleBlockState[]) => void;
+  articleId?: string;
 }
 
 function LocaleTabContent({
@@ -359,6 +366,7 @@ function LocaleTabContent({
   isSubmitting,
   onLocaleChange,
   onBlocksChange,
+  articleId,
 }: LocaleTabContentProps) {
   function handleTitleChange(value: string) {
     const patch: Partial<ArticleLocaleTabState> = { title: value };
@@ -458,6 +466,7 @@ function LocaleTabContent({
                 block={block}
                 activeLocale={locale}
                 isSubmitting={isSubmitting}
+                articleId={articleId}
                 onChange={(patch) =>
                   onBlocksChange(blocks.map((b) => b._id === block._id ? { ...b, ...patch } : b))
                 }
@@ -559,6 +568,7 @@ export function ArticleEditorForm({
   onDelete,
   title,
   validationRules,
+  articleId,
 }: ArticleEditorFormProps) {
   const { allLocales, defaultLanguage, getLocaleLabel } = useLanguages();
   // Include store locales + any locales present in defaultValues (e.g. during tests
@@ -738,6 +748,7 @@ export function ArticleEditorForm({
                   state={enrichedLocales[locale] ?? defaultLocaleTab()}
                   blocks={blocks}
                   isSubmitting={isSubmitting}
+                  articleId={articleId}
                   onLocaleChange={(patch) => handleLocaleChange(locale, patch)}
                   onBlocksChange={setBlocks}
                 />
@@ -792,6 +803,15 @@ export function ArticleEditorForm({
                     onChange={setCoverImageUrl}
                     disabled={isSubmitting}
                   />
+                </div>
+                <div className="border-t border-slate-100 pt-3">
+                  {articleId ? (
+                    <ImagesTab sourceType="article" sourceId={articleId} />
+                  ) : (
+                    <div className="rounded-lg border border-dashed border-slate-200 p-6 text-center text-sm text-slate-400">
+                      Save the article first to upload images.
+                    </div>
+                  )}
                 </div>
               </TabsContent>
 

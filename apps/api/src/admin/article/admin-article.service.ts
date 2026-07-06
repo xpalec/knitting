@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { MediaService } from '../../media/media.service';
 import { CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
 import { UpsertArticleTranslationDto } from './dto/upsert-article-translation.dto';
@@ -39,7 +40,10 @@ const ARTICLE_INCLUDE = {
 
 @Injectable()
 export class AdminArticleService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mediaService: MediaService,
+  ) {}
 
   // ---------------------------------------------------------------------------
   // Article CRUD
@@ -136,6 +140,7 @@ export class AdminArticleService {
 
   async delete(id: string) {
     await this.assertArticleExists(id);
+    await this.mediaService.deleteAssetsForEntity('article', id);
     await this.prisma.article.delete({ where: { id } });
     return { id, deleted: true };
   }

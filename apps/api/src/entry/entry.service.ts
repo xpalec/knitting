@@ -151,9 +151,6 @@ export class EntryService {
             translations: {
               select: { locale: true, slug: true, term: true },
             },
-            media_assets: {
-              orderBy: { sort_order: 'asc' },
-            },
             pattern_usage: true,
             categories: {
               include: {
@@ -234,11 +231,6 @@ export class EntryService {
           locale: t.locale,
           slug: t.slug,
           term: t.term,
-        })),
-        media_assets: entry.media_assets.map((m) => ({
-          type: m.type,
-          url: m.url,
-          sort_order: m.sort_order,
         })),
         pattern_usage: entry.pattern_usage.map((p) => ({
           pattern_name: p.pattern_name,

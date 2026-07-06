@@ -129,8 +129,8 @@ describe('EntryTemplatesPage', () => {
 
     render(<EntryTemplatesPage />);
 
-    // The "+ Add Template" link/button should be present
-    const addLinks = screen.getAllByText('+ Add Template');
+    // The "Add template" link/button should be present
+    const addLinks = screen.getAllByText('Add template');
     expect(addLinks.length).toBeGreaterThanOrEqual(1);
   });
 });
